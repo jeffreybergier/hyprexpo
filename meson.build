@@ -75,6 +75,9 @@ logic_tests = executable('HyprexpoLogicTests',
 
 test('HyprexpoLogicTests', logic_tests)
 
+rolodex_tests = executable('RolodexLayoutTests', files('tests/RolodexLayoutTests.cpp'))
+test('RolodexLayoutTests', rolodex_tests)
+
 source_tests = executable('OverviewSourceTests',
   files('tests/OverviewSourceTests.cpp'),
 )

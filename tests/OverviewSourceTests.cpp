@@ -1000,7 +1000,9 @@ int main() {
     expectOrder(scrollingDestructor, "resetInputState(EResetReason::Teardown)", "releaseAllCaptureState();", "destruction clears listeners/input before capture ownership");
     expectContains(sessionHeader, "injectScrollingInput", "injection routes through the polymorphic session without a concrete downcast");
     expectContains(overviewHeader, "injectScrollingInput", "grid session explicitly rejects scrolling-only injection");
-    expectAbsent(source, "m_events.input.mouse.axis.listen", "grid mode does not install scrolling axis ownership");
+    expectContains(source, "if (rolodex)\n        mouseAxisHook = Event::bus()->m_events.input.mouse.axis.listen",
+                   "only opt-in rolodex sessions install axis ownership; ordinary grid does not");
+    expectContains(source, "pointerOverview() != this", "rolodex axis ownership is monitor-local");
     expectAbsent(source, "m_events.input.touch.cancel.listen", "grid mode does not install scrolling cancel ownership");
 
     expectContains(configHeader, "SCROLLING_INPUT_DEBUG_DEFAULT", "synthetic input is default-disabled");

@@ -72,6 +72,8 @@ pkg_check_modules(deps REQUIRED IMPORTED_TARGET
 target_link_libraries(hyprexpo PRIVATE rt PkgConfig::deps PkgConfig::HYPREXPO_LUA)
 
 enable_testing()
+add_executable(RolodexLayoutTests tests/RolodexLayoutTests.cpp)
+add_test(NAME RolodexLayoutTests COMMAND RolodexLayoutTests)
 add_executable(HyprexpoLogicTests
     HyprexpoLogic.cpp
     ScrollingOverviewLogic.cpp

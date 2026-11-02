@@ -108,6 +108,10 @@ class COverview final : public IOverviewSession {
     };
 
   private:
+    double     rolodexPosition() const;
+    bool       stepRolodex(int direction);
+    void       renderRolodex();
+    int        rolodexHit(const Vector2D& point) const;
     void       redrawID(int id, bool forcelowres = false);
     void       redrawAll(bool forcelowres = false);
     void       onWorkspaceChange();
@@ -137,6 +141,13 @@ class COverview final : public IOverviewSession {
     void       enterSubmapIfEnabled();
     void       resetSubmapIfNeeded();
 
+    // Opt-in per session; the original grid remains the default.
+    bool       rolodex = false;
+    double     rolodexFrom = 0;
+    double     rolodexGoal = 0;
+    double     rolodexScroll = 0;
+    std::chrono::steady_clock::time_point rolodexMotionStart;
+    std::chrono::steady_clock::time_point rolodexLastScroll;
     bool       dynamicGrid = false;
     bool       emptyTilesSelectable = false;
     Hyprexpo::SGridShape gridShape{3, 3};
@@ -172,6 +183,7 @@ class COverview final : public IOverviewSession {
 
     CHyprSignalListener          mouseMoveHook;
     CHyprSignalListener          mouseButtonHook;
+    CHyprSignalListener          mouseAxisHook;
     CHyprSignalListener          touchMoveHook;
     CHyprSignalListener          touchDownHook;
     CHyprSignalListener          workspaceMoveHook;

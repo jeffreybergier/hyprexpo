@@ -791,6 +791,14 @@ std::vector<Hyprexpo::SGlobalTile> COverview::globalTiles() const {
 bool COverview::setKeyboardFocus(int tileIndex) {
     if (closing || !isTileValid(tileIndex))
         return false;
+    if (rolodex) {
+        // Choose the shortest path, including wraparound.
+        const int count = static_cast<int>(images.size());
+        double delta = std::remainder(static_cast<double>(tileIndex - kbFocusID), static_cast<double>(count));
+        rolodexFrom = rolodexPosition();
+        rolodexGoal += delta;
+        rolodexMotionStart = std::chrono::steady_clock::now();
+    }
     kbFocusID = tileIndex;
     damage();
     return true;
@@ -1092,6 +1100,7 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
     static auto* const* PWALLBG   = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprexpo:wallpaper_bg")->getDataStaticPtr();
     static auto* const* PDRAGDROPENABLE = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprexpo:drag_drop_enable")->getDataStaticPtr();
 
+    rolodex = CompatHyprlandAPI::intValue("plugin:hyprexpo:rolodex") != 0;
     createdAt            = std::chrono::steady_clock::now();
     gridShape            = Hyprexpo::computeFixedGridShape(**PCOLUMNS, **PROWS);
     GAP_WIDTH            = std::max<Hyprlang::INT>(0, **PGAPS);
@@ -1259,6 +1268,10 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
     if (!ENABLE_LOWRES)
         monbox = {{0, 0}, pMonitor->m_pixelSize};
 
+    // Bound snapshot memory independently of a future 6K output's resolution.
+    if (rolodex && monbox.w > 1920)
+        monbox.scale(1920.0 / monbox.w).round();
+
     int          currentid = 0;
 
     settleWorkspaceMoveAnimations();
@@ -1316,6 +1329,8 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
     lastMousePosLocal = g_pInputManager->getMouseCoordsInternal() - pMonitor->m_position;
     updateHoveredFromMouse();
     kbFocusID = openedID;
+    rolodexFrom = rolodexGoal = openedID;
+    rolodexMotionStart = std::chrono::steady_clock::now();
 
     auto onCursorMove = [this](Event::SCallbackInfo& info) {
         if (closing)
@@ -1362,6 +1377,24 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
         // mouse side-button firing the expo keybind) from swallowing real clicks.
         if (TARGET && TARGET->size->getPercent() < 0.05f) {
             TARGET->close(false);
+            return;
+        }
+
+        if (TARGET && TARGET->rolodex) {
+            if (event.state != WL_POINTER_BUTTON_STATE_RELEASED)
+                return;
+            if (event.button == 273) {
+                closeOverviews(false);
+                return;
+            }
+            if (event.button != 272)
+                return;
+            TARGET->updateHoveredFromMouse();
+            const int hit = TARGET->hoveredID;
+            if (hit == TARGET->kbFocusID && TARGET->onKbConfirm())
+                closeOverviewsSelecting(TARGET);
+            else if (hit >= 0)
+                TARGET->setKeyboardFocus(hit);
             return;
         }
 
@@ -1412,6 +1445,27 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
         }
         onTouchSelect(info);
     });
+    if (rolodex)
+        mouseAxisHook = Event::bus()->m_events.input.mouse.axis.listen([this](const IPointer::SAxisEvent& event, Event::SCallbackInfo& info) {
+            if (closing || info.cancelled || pointerOverview() != this)
+                return;
+            info.cancelled = true;
+            if (event.axis != WL_POINTER_AXIS_VERTICAL_SCROLL || event.delta == 0)
+                return;
+            const auto now = std::chrono::steady_clock::now();
+            if (now - rolodexLastScroll > std::chrono::milliseconds(250) || event.delta * rolodexScroll < 0)
+                rolodexScroll = 0;
+            rolodexLastScroll = now;
+            if (event.source == WL_POINTER_AXIS_SOURCE_WHEEL) {
+                stepRolodex(event.delta > 0 ? 1 : -1);
+            } else {
+                rolodexScroll += event.delta;
+                if (std::abs(rolodexScroll) >= 24) {
+                    stepRolodex(rolodexScroll > 0 ? 1 : -1);
+                    rolodexScroll = 0;
+                }
+            }
+        });
     workspaceMoveHook = Event::bus()->m_events.window.moveToWorkspace.listen([this](PHLWINDOW window, PHLWORKSPACE workspace) { onWindowMoveToWorkspace(window, workspace); });
 
     enterSubmapIfEnabled();

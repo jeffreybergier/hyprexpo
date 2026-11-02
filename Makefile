@@ -23,7 +23,7 @@ INCLUDES = $(shell pkg-config --cflags $(PKG_CONFIG_DEPS))
 LIBS = $(shell pkg-config --libs $(LINK_DEPS))
 
 SRC = main.cpp Dispatchers.cpp PluginConfig.cpp IOverviewSession.cpp Overview.cpp OverviewInteraction.cpp OverviewRender.cpp OverviewCapture.cpp ScrollingOverview.cpp ScrollingInputState.cpp ExpoGesture.cpp OverviewPassElement.cpp HyprexpoLogic.cpp ScrollingOverviewLogic.cpp ScrollingMutationTransaction.cpp ScrollingLayoutAdapter.cpp ScrollingDiagnostics.cpp
-HEADERS = globals.hpp Dispatchers.hpp PluginConfig.hpp HyprlandConfigCompat.hpp IOverviewSession.hpp Overview.hpp OverviewInternal.hpp OverviewCapture.hpp ScrollingOverview.hpp ScrollingInputState.hpp ScrollingRequestId.hpp ExpoGesture.hpp OverviewPassElement.hpp HyprexpoConfig.hpp HyprexpoLogic.hpp ScrollingOverviewLogic.hpp ScrollingMutationTransaction.hpp ScrollingLayoutAdapter.hpp ScrollingDiagnostics.hpp
+HEADERS = RolodexLayout.hpp globals.hpp Dispatchers.hpp PluginConfig.hpp HyprlandConfigCompat.hpp IOverviewSession.hpp Overview.hpp OverviewInternal.hpp OverviewCapture.hpp ScrollingOverview.hpp ScrollingInputState.hpp ScrollingRequestId.hpp ExpoGesture.hpp OverviewPassElement.hpp HyprexpoConfig.hpp HyprexpoLogic.hpp ScrollingOverviewLogic.hpp ScrollingMutationTransaction.hpp ScrollingLayoutAdapter.hpp ScrollingDiagnostics.hpp
 TARGET = hyprexpo.so
 TEST_TARGET = HyprexpoLogicTests
 SOURCE_TEST_TARGET = OverviewSourceTests
@@ -68,9 +68,13 @@ install: $(TARGET)
 	install -Dm755 $(TARGET) $(INSTALL_DIR)/$(INSTALL_NAME)
 
 clean:
-	rm -f ./$(TARGET) ./$(TEST_TARGET) ./$(SOURCE_TEST_TARGET) ./$(REGISTRY_TEST_TARGET) ./$(INPUT_ORACLE_TARGET)
+	rm -f ./RolodexLayoutTests ./$(TARGET) ./$(TEST_TARGET) ./$(SOURCE_TEST_TARGET) ./$(REGISTRY_TEST_TARGET) ./$(INPUT_ORACLE_TARGET)
 
-test: $(TEST_TARGET) $(SOURCE_TEST_TARGET) $(REGISTRY_TEST_TARGET)
+RolodexLayoutTests: tests/RolodexLayoutTests.cpp RolodexLayout.hpp
+	$(CXX) -std=c++2b -Wall -Wextra -Werror tests/RolodexLayoutTests.cpp -o $@
+
+test: $(TEST_TARGET) $(SOURCE_TEST_TARGET) $(REGISTRY_TEST_TARGET) RolodexLayoutTests
+	./RolodexLayoutTests
 	./$(TEST_TARGET)
 	./$(SOURCE_TEST_TARGET)
 	./$(REGISTRY_TEST_TARGET)

@@ -75,7 +75,7 @@ void COverview::updateHoveredFromMouse() {
     if (!MON)
         return;
 
-    const int newHoveredID = tileIndexAtPoint(lastMousePosLocal, size->value(), GAP_WIDTH, currentOuterInset(), true);
+    const int newHoveredID = rolodex ? rolodexHit(lastMousePosLocal) : tileIndexAtPoint(lastMousePosLocal, size->value(), GAP_WIDTH, currentOuterInset(), true);
     if (newHoveredID == hoveredID)
         return;
 
@@ -594,6 +594,9 @@ bool COverview::onKbMoveFocus(const std::string& dir) {
         direction = Hyprexpo::EDirection::Down;
     } else
         return false;
+
+    if (rolodex)
+        return stepRolodex(dx + dy);
 
     if (moveFocus(dx, dy)) {
         damage();

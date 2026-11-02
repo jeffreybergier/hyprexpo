@@ -1,0 +1,32 @@
+#include "../RolodexLayout.hpp"
+#include <cassert>
+#include <iostream>
+using namespace Hyprexpo::Rolodex;
+int main() {
+    assert(wrap(-1, 10) == 9 && wrap(10, 10) == 0 && wrap(0, 0) == -1);
+    assert(distance(0, 9, 10) == 1 && distance(9, 0, 10) == -1);
+    assert(interpolate(0, 1, 0) == 0 && interpolate(0, 1, 0.24) == 1);
+    assert(interpolate(0, 1, 0.1) > 0 && interpolate(0, 1, 0.1) < 1);
+    assert(interpolate(2, -1, 1) == -1);
+    for (int count : {1, 2, 3, 10, 50}) {
+        for (double position : {-10.0, -0.5, 0.0, 0.5, 9.75, 50.0}) {
+            for (int id = 0; id < count; ++id) {
+                const auto c = card(id, position, count, 1920, 1080);
+                const auto scaled = card(id, position, count, 5760, 3240);
+                const auto top = c.row(0), bottom = c.row(1);
+                assert(std::isfinite(top.y) && bottom.y > top.y && top.right > top.left);
+                assert(std::abs(scaled.row(0).left - 3 * top.left) < 1e-6);
+                assert(!c.contains(-1, -1));
+                if (c.visible) assert(c.contains(c.cx, c.cy));
+                assert(!c.contains(c.cx, bottom.y + 1));
+                for (int i = 0; i < 96; ++i) assert(c.row((i + 1) / 96.0).y > c.row(i / 96.0).y);
+            }
+        }
+    }
+    const auto front = card(0, 0, 10, 1920, 1080);
+    assert(front.tilt == 0 && front.depth == 1 && front.visible);
+    assert(card(1, 0, 10, 1920, 1080).cy > front.cy);
+    assert(card(9, 0, 10, 1920, 1080).cy < front.cy);
+    assert(!card(5, 0, 10, 1920, 1080).visible);
+    std::cout << "RolodexLayoutTests passed\n";
+}

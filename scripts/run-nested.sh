@@ -10,12 +10,25 @@ BUILD_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/hyprexpo"
 SO="${HYPREXPO_DEV_SO:-$BUILD_DIR/hyprexpo.so}"
 CONF="${XDG_CACHE_HOME:-$HOME/.cache}/hyprexpo-dev.conf"
 DEV_LAYOUT="${HYPREXPO_DEV_LAYOUT:-grid}"
+ROLODEX=0
+GRID_COLUMNS=3
+GRID_ROWS=0
+ROLODEX_BINDS=''
 
 case "$DEV_LAYOUT" in
     grid)
         LAYOUT_BLOCK=''
         FIXTURE_BLOCK=''
         SCROLLING_INPUT_DEBUG=0
+        ;;
+    rolodex)
+        LAYOUT_BLOCK=''
+        FIXTURE_BLOCK=''
+        SCROLLING_INPUT_DEBUG=0
+        ROLODEX=1
+        GRID_COLUMNS=5
+        GRID_ROWS=2
+        ROLODEX_BINDS=$'bind = SUPER, mouse_down, hyprexpo:expo, on\nbind = SUPER, mouse_up, hyprexpo:expo, on'
         ;;
     scrolling)
         SCROLLING_INPUT_DEBUG=1
@@ -60,7 +73,7 @@ exec-once = sh -c 'sleep 2; hyprctl dispatch focuswindow title:HYPREXPO-SCROLL-D
 EOF
         ;;
     *)
-        printf 'HYPREXPO_DEV_LAYOUT must be grid or scrolling, got: %s\n' "$DEV_LAYOUT" >&2
+        printf 'HYPREXPO_DEV_LAYOUT must be grid, rolodex, or scrolling, got: %s\n' "$DEV_LAYOUT" >&2
         exit 2
         ;;
 esac
@@ -123,7 +136,9 @@ plugin = $SO
 plugin {
   hyprexpo {
     # layout + visuals
-    columns = 3
+    columns = $GRID_COLUMNS
+    rows = $GRID_ROWS
+    rolodex = $ROLODEX
     gaps_in = 20
     bg_col = rgb(101010)
     workspace_method = center current
@@ -175,6 +190,8 @@ plugin {
 bind = , F10, hyprexpo:expo, toggle
 bind = , F11, hyprexpo:expo, toggle all
 
+$ROLODEX_BINDS
+
 # nested-session test controls
 bind = SUPER, Return, exec, $TERMINAL
 bind = SUPER, Q, killactive
@@ -207,6 +224,7 @@ bind = SUPER ALT, F, layoutmsg, fit visible
 
 # submap for keyboard nav (the plugin auto-enters this when open)
 submap = hyprexpo
+  bind = , escape, hyprexpo:expo, cancel
   bind = , left, hyprexpo:kb_focus, left
   bind = , right, hyprexpo:kb_focus, right
   bind = , up, hyprexpo:kb_focus, up
@@ -230,4 +248,4 @@ EOF
 echo "[run-nested] Launching nested Hyprland with $CONF"
 # Hyprland 0.56 uses aquamarine, not wlroots: the old WLR_* variables are
 # inert. Aquamarine selects its Wayland backend from WAYLAND_DISPLAY.
-exec env HYPRLAND_NO_LOGO=1 Hyprland -c "$CONF"
+exec env HYPRLAND_NO_LOGO=1 HYPRLAND_NO_SD_VARS=1 HYPRLAND_NO_SD_NOTIFY=1 Hyprland -c "$CONF"

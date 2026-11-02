@@ -4,6 +4,7 @@
 #include "OverviewCapture.hpp"
 #include "HyprexpoLogic.hpp"
 #include "OverviewPassElement.hpp"
+#include "RolodexLayout.hpp"
 #define private   public
 #define protected public
 #include <hyprland/src/Compositor.hpp>
@@ -52,6 +53,9 @@ void COverview::redrawID(int id, bool forcelowres) {
 
     if (!ENABLE_LOWRES)
         monbox = {{0, 0}, MON->m_pixelSize};
+
+    if (rolodex && monbox.w > 1920)
+        monbox.scale(1920.0 / monbox.w).round();
 
     auto& image = images[id];
 
@@ -253,6 +257,106 @@ bool COverview::shouldRenderOverviewForMonitor(const PHLMONITOR& monitor) const 
 }
 
 
+double COverview::rolodexPosition() const {
+    return Hyprexpo::Rolodex::interpolate(rolodexFrom, rolodexGoal,
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - rolodexMotionStart).count());
+}
+
+bool COverview::stepRolodex(int direction) {
+    if (!rolodex || closing || images.empty() || direction == 0)
+        return false;
+    const int count = static_cast<int>(images.size());
+    for (int step = 1; step <= count; ++step) {
+        const int next = Hyprexpo::Rolodex::wrap(kbFocusID + (direction > 0 ? step : -step), count);
+        if (isTileValid(next)) {
+            rolodexFrom = rolodexPosition();
+            rolodexGoal += direction > 0 ? step : -step;
+            rolodexMotionStart = std::chrono::steady_clock::now();
+            kbFocusID = next;
+            damage();
+            return true;
+        }
+    }
+    return false;
+}
+
+int COverview::rolodexHit(const Vector2D& point) const {
+    const auto mon = pMonitor.lock();
+    if (!mon) return -1;
+    int hit = -1;
+    double nearest = -1;
+    for (int id = 0; id < static_cast<int>(images.size()); ++id) {
+        const auto card = Hyprexpo::Rolodex::card(id, rolodexPosition(), images.size(), mon->m_size.x, mon->m_size.y);
+        if (isTileValid(id) && card.depth > nearest && card.contains(point.x, point.y)) {
+            hit = id;
+            nearest = card.depth;
+        }
+    }
+    return hit;
+}
+
+void COverview::renderRolodex() {
+    const auto mon = pMonitor.lock();
+    if (!mon) return;
+    const double position = rolodexPosition();
+    const float fade = closing ? 1.0f - size->getPercent() : size->getPercent();
+    struct Tile { int id; Hyprexpo::Rolodex::Card card; };
+    std::vector<Tile> tiles;
+    for (int id = 0; id < static_cast<int>(images.size()); ++id) {
+        auto card = Hyprexpo::Rolodex::card(id, position, images.size(), mon->m_size.x, mon->m_size.y);
+        if (isTileValid(id) && card.visible && images[id].fb && images[id].fb->getTexture())
+            tiles.push_back({id, card});
+    }
+    std::stable_sort(tiles.begin(), tiles.end(), [](const auto& a, const auto& b) { return a.card.depth < b.card.depth; });
+    CRegion damageRegion{0, 0, INT16_MAX, INT16_MAX};
+    for (const auto& tile : tiles) {
+        // Approximate a perspective trapezoid with UV-mapped horizontal strips.
+        // Uses Hyprland's existing color-managed texture path, no raw GL state.
+        const int strips = std::abs(tile.card.tilt) < 0.001 ? 1 : 96;
+        for (int strip = 0; strip < strips; ++strip) {
+            const double v0 = static_cast<double>(strip) / strips;
+            const double v1 = static_cast<double>(strip + 1) / strips;
+            const auto top = tile.card.row(v0), bottom = tile.card.row(v1);
+            const auto middle = tile.card.row((v0 + v1) / 2);
+            CBox box{middle.left * mon->m_scale, std::floor(top.y * mon->m_scale),
+                     (middle.right - middle.left) * mon->m_scale,
+                     std::floor(bottom.y * mon->m_scale) - std::floor(top.y * mon->m_scale)};
+            Render::GL::g_pHyprOpenGL->renderTextureInternal(images[tile.id].fb->getTexture(), box,
+                {.damage = &damageRegion, .a = fade * static_cast<float>(0.55 + tile.card.depth * 0.45),
+                 .allowCustomUV = true, .primarySurfaceUVTopLeft = {0.0, v0}, .primarySurfaceUVBottomRight = {1.0, v1}});
+            CHyprColor edge = tile.id == kbFocusID ? CHyprColor{0xff72e0e8} : CHyprColor{0xff425269};
+            edge.a *= fade;
+            const double thickness = 2 * mon->m_scale;
+            CBox left{box.x, box.y, thickness, box.h};
+            CBox right{box.x + box.w - thickness, box.y, thickness, box.h};
+            Render::GL::g_pHyprOpenGL->renderRect(left, edge, {});
+            Render::GL::g_pHyprOpenGL->renderRect(right, edge, {});
+            if (strip == 0) {
+                CBox rim{box.x, box.y, box.w, thickness};
+                Render::GL::g_pHyprOpenGL->renderRect(rim, edge, {});
+            }
+            if (strip == strips - 1) {
+                CBox rim{box.x, box.y + box.h - thickness, box.w, thickness};
+                Render::GL::g_pHyprOpenGL->renderRect(rim, edge, {});
+            }
+        }
+    }
+    if (isTileValid(kbFocusID)) {
+        auto& image = images[kbFocusID];
+        const Vector2D labelSize{std::min(900.0, mon->m_size.x * 0.9) * mon->m_scale, 64 * mon->m_scale};
+        if (!image.labelTexFocus) {
+            image.labelTexFocus = renderNumberTexture("Desktop " + std::to_string(image.workspaceID) +
+                "  |  Scroll to rotate\nClick / Enter to select  |  Right-click / Esc to cancel",
+                CHyprColor{0xffa8eaf0}, labelSize, mon->m_scale, 14);
+        }
+        CBox label{{(mon->m_transformedSize.x - labelSize.x) / 2, mon->m_transformedSize.y - labelSize.y}, labelSize};
+        if (image.labelTexFocus)
+            Render::GL::g_pHyprOpenGL->renderTexture(image.labelTexFocus, label, {.a = fade});
+    }
+    if (std::abs(position - rolodexGoal) > 0.00001)
+        damage();
+}
+
 void COverview::fullRender() {
     const auto MON = pMonitor.lock();
     if (!MON)
@@ -275,6 +379,11 @@ void COverview::fullRender() {
         CBox    backgroundBox{{0, 0}, MON->m_transformedSize};
         Render::GL::g_pHyprOpenGL->renderTextureInternal(MON->m_background, backgroundBox, {.damage = &backgroundDamage, .a = 1.0f});
         Render::GL::g_pHyprOpenGL->renderRect(backgroundBox, CHyprColor{0x00000066}, {});
+    }
+
+    if (rolodex) {
+        renderRolodex();
+        return;
     }
 
     static auto* const* PTILEROUND  = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprexpo:tile_rounding")->getDataStaticPtr();
