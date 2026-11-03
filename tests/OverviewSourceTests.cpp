@@ -788,6 +788,13 @@ int main() {
     expectLastOrder(workspaceCapture, "renderWorkspace(", "restoreWorkspacePreviewStates(", "workspace preview state restores after rendering");
     expectLastOrder(workspaceCapture, "renderWorkspace(", "restoreActiveWorkspaceAfterPreview(", "active workspace restores after rendering");
     expectLastOrder(workspaceCapture, "restoreActiveWorkspaceAfterPreview(", "rendererState.finish()", "workspace capture ends only after workspace restoration");
+    expectContains(workspaceCapture, "const CBox nativeBox{{0, 0}, request.monitor->m_pixelSize}", "workspace clipping stays in native pixel coordinates");
+    expectContains(workspaceCapture, "sceneBox = downsample ? nativeBox : captureBox", "scaled previews render the scene at native size first");
+    expectContains(workspaceCapture, "Time::steadyNow(), sceneBox)", "workspace rendering uses the unscaled scene geometry");
+    expectAbsent(workspaceCapture, "Time::steadyNow(), captureBox)", "small preview geometry never clips individual client surfaces");
+    expectOrder(workspaceCapture, "rendererState.finish()", "renderTextureInternal(texture, captureBox", "downsampling happens after workspace rendering completes");
+    expectContains(workspaceCapture, "nullptr, framebuffer, true)", "the downsample pass draws directly into the retained small framebuffer");
+    expectContains(workspaceCapture, "SP<Render::IFramebuffer> nativeFramebuffer;", "native scratch buffer is local to one capture, not retained per workspace");
     expectContains(overviewConstructor, "captureWorkspacePreview(", "initial grid capture uses the shared workspace helper");
     const auto redrawID = extractFunction(renderSource, "void COverview::redrawID(");
     expectContains(redrawID, "captureWorkspacePreview(", "grid redraw uses the shared workspace helper");

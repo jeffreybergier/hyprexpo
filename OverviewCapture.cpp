@@ -179,12 +179,24 @@ bool captureWorkspacePreview(const SWorkspaceCaptureRequest& request, SP<Render:
         if (!ensureFramebuffer(framebuffer, captureBox, framebufferFormatWithAlpha(request.monitor->m_output->state->state().drmFormat)))
             return false;
 
+        // Hyprland 0.56 scales texture boxes but not every surface clip region
+        // in renderWorkspace (notably GTK/Ghostty/Firefox). Capture in native
+        // coordinates, then scale the completed image. Only one transient
+        // full-size framebuffer exists; retained previews keep their size cap.
+        const CBox nativeBox{{0, 0}, request.monitor->m_pixelSize};
+        const bool downsample = captureBox.size() != nativeBox.size();
+        SP<Render::IFramebuffer> nativeFramebuffer;
+        if (downsample && !ensureFramebuffer(nativeFramebuffer, nativeBox, framebufferFormatWithAlpha(request.monitor->m_output->state->state().drmFormat)))
+            return false;
+        const auto& sceneBox = downsample ? nativeBox : captureBox;
+        const auto& sceneFramebuffer = downsample ? nativeFramebuffer : framebuffer;
+
         if (monitorState.activeSpecialWorkspace())
             request.monitor->m_activeSpecialWorkspace.reset();
         request.startedOn->m_visible = false;
 
         CRegion fakeDamage{0, 0, INT16_MAX, INT16_MAX};
-        if (!g_pHyprRenderer->beginRender(request.monitor, fakeDamage, Render::RENDER_MODE_FULL_FAKE, nullptr, framebuffer))
+        if (!g_pHyprRenderer->beginRender(request.monitor, fakeDamage, Render::RENDER_MODE_FULL_FAKE, nullptr, sceneFramebuffer))
             return false;
         rendererState.begun();
         g_pHyprRenderer->m_bBlockSurfaceFeedback = g_pHyprRenderer->m_bBlockSurfaceFeedback || request.blockSurfaceFeedback;
@@ -225,7 +237,7 @@ bool captureWorkspacePreview(const SWorkspaceCaptureRequest& request, SP<Render:
 
             {
                 CPinnedWindowPreviewGuard pinnedWindowPreviewGuard{request.showPinnedWindows};
-                g_pHyprRenderer->renderWorkspace(request.monitor, request.workspace, Time::steadyNow(), captureBox);
+                g_pHyprRenderer->renderWorkspace(request.monitor, request.workspace, Time::steadyNow(), sceneBox);
             }
 
             restoreWorkspaceWindowGoalState(windowState);
@@ -237,11 +249,26 @@ bool captureWorkspacePreview(const SWorkspaceCaptureRequest& request, SP<Render:
                 request.monitor->m_activeSpecialWorkspace.reset();
         } else {
             CPinnedWindowPreviewGuard pinnedWindowPreviewGuard{request.showPinnedWindows};
-            g_pHyprRenderer->renderWorkspace(request.monitor, request.workspace, Time::steadyNow(), captureBox);
+            g_pHyprRenderer->renderWorkspace(request.monitor, request.workspace, Time::steadyNow(), sceneBox);
         }
 
         g_pHyprRenderer->m_renderData.blockScreenShader = true;
         rendererState.finish();
+        if (downsample) {
+            const auto texture = nativeFramebuffer->getTexture();
+            if (!texture)
+                return false;
+            texture->m_transform = HYPRUTILS_TRANSFORM_NORMAL;
+            // Draw directly into the small destination, without per-surface
+            // clipping or another compositor work buffer.
+            if (!g_pHyprRenderer->beginRender(request.monitor, fakeDamage, Render::RENDER_MODE_FULL_FAKE, nullptr, framebuffer, true))
+                return false;
+            rendererState.begun();
+            clearWithColor(CHyprColor{0, 0, 0, 1.0});
+            Render::GL::g_pHyprOpenGL->renderTextureInternal(texture, captureBox, {.damage = &fakeDamage, .a = 1.0f});
+            g_pHyprRenderer->m_renderData.blockScreenShader = true;
+            rendererState.finish();
+        }
         rendererState.restore();
         if (!rendererState.restored())
             return false;

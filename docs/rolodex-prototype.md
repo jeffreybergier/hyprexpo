@@ -34,8 +34,11 @@ columns/rows/workspace_method settings (use 5 columns, 2 rows for ten desktops).
 - Click a rear card to bring it forward; click the selected card or Enter to
   select. Right-click or Escape cancels without switching workspaces.
 - Window drag/drop is deliberately disabled in this mode.
-- Captures are capped at 1920 pixels wide, preserving aspect ratio. This avoids
-  allocating ten full 6K workspace buffers. Final drawing uses output scale.
+- Retained captures are capped at 1920 pixels wide, preserving aspect ratio.
+  Downscaled previews first render to one transient native-resolution buffer,
+  then shrink the completed image on the GPU. This avoids allocating ten retained
+  full 6K workspace buffers. Peak capture memory includes that one full-resolution
+  scratch buffer, released after each capture. Final drawing uses output scale.
 
 This is not a finished renderer. Perspective is approximated with 96 UV-mapped
 horizontal strips per tilted card, using Hyprland's color-managed rendering
@@ -141,6 +144,31 @@ For full binary rollback, first remove the `rolodex` config key, close the
 overview, unload the installed plugin, use `sudo install -m 755` to restore that
 original binary to the hyprpm path, load it, and reload the configuration. Never
 overwrite a mapped plugin in place. Sync config edits with chezmoi.
+
+## Black-bar capture regression
+
+Hyprland 0.56.2 applies `renderWorkspace` scale modifiers to texture boxes but
+`CSurfacePassElement::visibleRegion()` computes clipping in native monitor
+coordinates. The GL texture path intersects that clip region without applying
+the same modifier. At a 1920-wide capture of a 2304-wide display, surfaces that
+supply visible regions (reproduced with Ghostty and observed with Firefox) lose
+parts of their left/top content. A full-screen window at the origin can conceal
+the bug; offset tiled windows make it obvious. Kitty did not reproduce it.
+
+The shared workspace capture now renders at native resolution and only scales
+the resulting texture. It retains per-surface clipping instead of disabling it,
+and does not change compositor-wide scale, blur, or occlusion settings. Unscaled
+captures retain their single-pass path. The existing rotated-output normalization
+is unchanged and remains outside the verified cases.
+
+Reproduced in a disposable compositor at **2304x1440, scale 1.6**, with colored
+Kitty windows, a floating overlapping window, a transparent window, and Ghostty.
+Before/after screenshots are `/tmp/rolodex-bars-ghostty-{before,after}.png` for
+this local session. The 80x100 Ghostty-interior region at pixel (1200,1000)
+contained **8000 dark pixels before and zero after** the fix. A direct compositor
+capture of the live desktop confirmed matching bars across Firefox/Ghostty.
+Source regression checks enforce native scene geometry, completion before
+resampling, direct small-FBO rendering, and local scratch-buffer lifetime.
 
 ## Fluid interaction validation
 
