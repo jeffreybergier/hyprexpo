@@ -147,11 +147,22 @@ void COverview::close(bool switchToSelection) {
         return;
     }
 
-    const int   ID = closeOnID == -1 ? openedID : closeOnID;
+    const int   ID = rolodex && !switchToSelection ? openedID : (closeOnID == -1 ? openedID : closeOnID);
 
     const int   SAFEID = std::clamp(ID, 0, (int)images.size() - 1);
     const auto& TILE   = images[SAFEID];
 
+    if (rolodex) {
+        rolodexReleaseArmed = false;
+        closeOnID = rolodexCloseID = SAFEID;
+        rolodexCloseAmount = rolodexOverviewAmount();
+        rolodexCloseCards.clear();
+        for (int i = 0; i < static_cast<int>(images.size()); ++i)
+            rolodexCloseCards.push_back(rolodexCard(i));
+        // Freeze geometry at the exact visible position, including mid-scroll.
+        rolodexFrom = rolodexGoal = rolodexPosition();
+        rolodexTracking = false;
+    }
     const auto targetSize = zoomSizeForCurrentGrid(MON->m_size);
     *size = targetSize;
     *pos  = -(tilePosForID(SAFEID, targetSize, 0.0) * MON->m_scale);
@@ -258,13 +269,58 @@ bool COverview::shouldRenderOverviewForMonitor(const PHLMONITOR& monitor) const 
 
 
 double COverview::rolodexPosition() const {
+    if (rolodexTracking)
+        return rolodexGoal;
     return Hyprexpo::Rolodex::interpolate(rolodexFrom, rolodexGoal,
         std::chrono::duration<double>(std::chrono::steady_clock::now() - rolodexMotionStart).count());
+}
+
+void COverview::updateRolodexFocus() {
+    double nearest = std::numeric_limits<double>::max();
+    for (int id = 0; id < static_cast<int>(images.size()); ++id) {
+        const double distance = std::abs(Hyprexpo::Rolodex::distance(id, rolodexGoal, images.size()));
+        if (isTileValid(id) && distance < nearest) {
+            nearest = distance;
+            kbFocusID = id;
+        }
+    }
+}
+
+void COverview::settleRolodex() {
+    if (!rolodexTracking)
+        return;
+    updateRolodexFocus();
+    rolodexFrom = rolodexGoal;
+    rolodexGoal += Hyprexpo::Rolodex::distance(kbFocusID, rolodexGoal, images.size());
+    rolodexTracking = false;
+    rolodexMotionStart = std::chrono::steady_clock::now();
+    damage();
+}
+
+double COverview::rolodexOverviewAmount() const {
+    const auto mon = pMonitor.lock();
+    if (!mon) return 1;
+    const double span = zoomSizeForCurrentGrid(mon->m_size).x - mon->m_size.x;
+    return std::abs(span) < 0.001 ? 1 : std::clamp(1.0 - (size->value().x - mon->m_size.x) / span, 0.0, 1.0);
+}
+
+Hyprexpo::Rolodex::Card COverview::rolodexCard(int id) const {
+    const auto mon = pMonitor.lock();
+    if (!mon) return {};
+    const auto card = Hyprexpo::Rolodex::card(id, rolodexPosition(), images.size(), mon->m_size.x, mon->m_size.y);
+    if (!rolodexTransition) return card;
+    const auto desktop = Hyprexpo::Rolodex::desktop(mon->m_size.x, mon->m_size.y);
+    if (closing && id < static_cast<int>(rolodexCloseCards.size())) {
+        const auto& start = rolodexCloseCards[id];
+        return id == rolodexCloseID ? Hyprexpo::Rolodex::blend(start, desktop, size->getPercent()) : start;
+    }
+    return id == openedID ? Hyprexpo::Rolodex::blend(desktop, card, rolodexOverviewAmount()) : card;
 }
 
 bool COverview::stepRolodex(int direction) {
     if (!rolodex || closing || images.empty() || direction == 0)
         return false;
+    settleRolodex();
     const int count = static_cast<int>(images.size());
     for (int step = 1; step <= count; ++step) {
         const int next = Hyprexpo::Rolodex::wrap(kbFocusID + (direction > 0 ? step : -step), count);
@@ -286,7 +342,7 @@ int COverview::rolodexHit(const Vector2D& point) const {
     int hit = -1;
     double nearest = -1;
     for (int id = 0; id < static_cast<int>(images.size()); ++id) {
-        const auto card = Hyprexpo::Rolodex::card(id, rolodexPosition(), images.size(), mon->m_size.x, mon->m_size.y);
+        const auto card = rolodexCard(id);
         if (isTileValid(id) && card.depth > nearest && card.contains(point.x, point.y)) {
             hit = id;
             nearest = card.depth;
@@ -299,17 +355,35 @@ void COverview::renderRolodex() {
     const auto mon = pMonitor.lock();
     if (!mon) return;
     const double position = rolodexPosition();
-    const float fade = closing ? 1.0f - size->getPercent() : size->getPercent();
+    const float fade = rolodexTransition ? (closing ? rolodexCloseAmount * (1.0f - size->getPercent()) : rolodexOverviewAmount()) :
+        (closing ? 1.0f - size->getPercent() : size->getPercent());
+    const int anchor = closing ? rolodexCloseID : openedID;
     struct Tile { int id; Hyprexpo::Rolodex::Card card; };
     std::vector<Tile> tiles;
     for (int id = 0; id < static_cast<int>(images.size()); ++id) {
-        auto card = Hyprexpo::Rolodex::card(id, position, images.size(), mon->m_size.x, mon->m_size.y);
+        auto card = rolodexCard(id);
         if (isTileValid(id) && card.visible && images[id].fb && images[id].fb->getTexture())
             tiles.push_back({id, card});
     }
-    std::stable_sort(tiles.begin(), tiles.end(), [](const auto& a, const auto& b) { return a.card.depth < b.card.depth; });
+    std::stable_sort(tiles.begin(), tiles.end(), [this, anchor](const auto& a, const auto& b) {
+        // The desktop morph must remain above the stack until it completes.
+        if (rolodexTransition && (closing || rolodexOverviewAmount() < 0.999)) {
+            if (a.id == anchor) return false;
+            if (b.id == anchor) return true;
+        }
+        return a.card.depth < b.card.depth;
+    });
     CRegion damageRegion{0, 0, INT16_MAX, INT16_MAX};
     for (const auto& tile : tiles) {
+        float opacity = fade;
+        if (rolodexTransition) {
+            if (closing) {
+                const float startOpacity = tile.id == openedID ? 1.0f : rolodexCloseAmount;
+                opacity = tile.id == anchor ? startOpacity + (1.0f - startOpacity) * size->getPercent() :
+                    startOpacity * (1.0f - size->getPercent());
+            } else if (tile.id == anchor)
+                opacity = 1.0f;
+        }
         // Approximate a perspective trapezoid with UV-mapped horizontal strips.
         // Uses Hyprland's existing color-managed texture path, no raw GL state.
         const int strips = std::abs(tile.card.tilt) < 0.001 ? 1 : 96;
@@ -322,7 +396,7 @@ void COverview::renderRolodex() {
                      (middle.right - middle.left) * mon->m_scale,
                      std::floor(bottom.y * mon->m_scale) - std::floor(top.y * mon->m_scale)};
             Render::GL::g_pHyprOpenGL->renderTextureInternal(images[tile.id].fb->getTexture(), box,
-                {.damage = &damageRegion, .a = fade * static_cast<float>(0.55 + tile.card.depth * 0.45),
+                {.damage = &damageRegion, .a = opacity * static_cast<float>(0.55 + tile.card.depth * 0.45),
                  .allowCustomUV = true, .primarySurfaceUVTopLeft = {0.0, v0}, .primarySurfaceUVBottomRight = {1.0, v1}});
             CHyprColor edge = tile.id == kbFocusID ? CHyprColor{0xff72e0e8} : CHyprColor{0xff425269};
             edge.a *= fade;
@@ -346,7 +420,8 @@ void COverview::renderRolodex() {
         const Vector2D labelSize{std::min(900.0, mon->m_size.x * 0.9) * mon->m_scale, 64 * mon->m_scale};
         if (!image.labelTexFocus) {
             image.labelTexFocus = renderNumberTexture("Desktop " + std::to_string(image.workspaceID) +
-                "  |  Scroll to rotate\nClick / Enter to select  |  Right-click / Esc to cancel",
+                (rolodexReleaseArmed ? "  |  Scroll to rotate\nRelease Super to select  |  Esc to cancel" :
+                 "  |  Scroll to rotate\nClick / Enter to select  |  Right-click / Esc to cancel"),
                 CHyprColor{0xffa8eaf0}, labelSize, mon->m_scale, 14);
         }
         CBox label{{(mon->m_transformedSize.x - labelSize.x) / 2, mon->m_transformedSize.y - labelSize.y}, labelSize};

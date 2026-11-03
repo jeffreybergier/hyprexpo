@@ -25,6 +25,10 @@
 #include <hyprland/src/managers/eventLoop/EventLoopManager.hpp>
 #include <hyprland/src/managers/eventLoop/EventLoopTimer.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
+#include <hyprland/src/managers/KeybindManager.hpp>
+#include <hyprland/src/managers/SessionLockManager.hpp>
+#include <hyprland/src/protocols/ShortcutsInhibit.hpp>
+#include <hyprland/src/protocols/InputCapture.hpp>
 #include <hyprland/src/helpers/time/Time.hpp>
 #include <hyprland/src/helpers/varlist/VarList.hpp>
 #include <hyprland/src/helpers/Format.hpp>
@@ -792,6 +796,7 @@ bool COverview::setKeyboardFocus(int tileIndex) {
     if (closing || !isTileValid(tileIndex))
         return false;
     if (rolodex) {
+        settleRolodex();
         // Choose the shortest path, including wraparound.
         const int count = static_cast<int>(images.size());
         double delta = std::remainder(static_cast<double>(tileIndex - kbFocusID), static_cast<double>(count));
@@ -1068,7 +1073,20 @@ Vector2D COverview::zoomSizeForCurrentGrid(const Vector2D& monitorSize) const {
 void COverview::seedRolodexScroll(double delta) {
     if (!rolodex || closing)
         return;
+    if (!std::isfinite(delta))
+        return;
+    if (rolodexContinuous && delta == 0) {
+        settleRolodex();
+        return;
+    }
     rolodexLastScroll = std::chrono::steady_clock::now();
+    if (rolodexContinuous) {
+        rolodexFrom = rolodexGoal = Hyprexpo::Rolodex::fingerPosition(rolodexPosition(), delta, rolodexScrollDistance, images.size());
+        rolodexTracking = true;
+        updateRolodexFocus();
+        damage();
+        return;
+    }
     rolodexScroll += delta;
     if (std::abs(rolodexScroll) >= 24) {
         stepRolodex(rolodexScroll > 0 ? 1 : -1);
@@ -1076,7 +1094,29 @@ void COverview::seedRolodexScroll(double delta) {
     }
 }
 
+void COverview::tickRolodex() {
+    if (closing)
+        return;
+    if (g_pSessionLockManager->isSessionLocked() || PROTO::shortcutsInhibit->isInhibited() || PROTO::inputCapture->isCaptured()) {
+        rolodexReleaseArmed = false;
+        settleRolodex();
+        return;
+    }
+    if (rolodexTracking && std::chrono::steady_clock::now() - rolodexLastScroll > std::chrono::milliseconds(120))
+        settleRolodex();
+    // Observe merged modifier state after Hyprland has processed key events.
+    // This handles either Super key, two keyboards, and modifier-only updates.
+    if (rolodexReleaseArmed && !(g_pInputManager->getModsFromAllKBs() & g_pKeybindManager->stringToModMask("SUPER"))) {
+        rolodexReleaseArmed = false;
+        settleRolodex();
+        if (onKbConfirm())
+            closeOverviewsSelecting(this);
+    }
+}
+
 COverview::~COverview() {
+    if (rolodexTimer)
+        rolodexTimer->cancel();
     if (redrawSettleTimer) {
         redrawSettleTimer->cancel();
         redrawSettleTimer.reset();
@@ -1112,6 +1152,12 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
     static auto* const* PDRAGDROPENABLE = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprexpo:drag_drop_enable")->getDataStaticPtr();
 
     rolodex = CompatHyprlandAPI::intValue("plugin:hyprexpo:rolodex") != 0;
+    rolodexContinuous = rolodex && CompatHyprlandAPI::intValue("plugin:hyprexpo:rolodex_continuous") != 0;
+    rolodexTransition = rolodex && CompatHyprlandAPI::intValue("plugin:hyprexpo:rolodex_transition") != 0;
+    rolodexScrollDistance = std::max<int64_t>(1, CompatHyprlandAPI::intValue("plugin:hyprexpo:rolodex_scroll_distance"));
+    rolodexReleaseArmed = rolodex && !swipe && CompatHyprlandAPI::intValue("plugin:hyprexpo:rolodex_release_super") != 0 &&
+        pMonitor.lock() == State::monitorState()->query().vec(g_pInputManager->getMouseCoordsInternal()).run() &&
+        (g_pInputManager->getModsFromAllKBs() & g_pKeybindManager->stringToModMask("SUPER"));
     createdAt            = std::chrono::steady_clock::now();
     gridShape            = Hyprexpo::computeFixedGridShape(**PCOLUMNS, **PROWS);
     GAP_WIDTH            = std::max<Hyprlang::INT>(0, **PGAPS);
@@ -1461,8 +1507,13 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
             if (closing || info.cancelled || pointerOverview() != this)
                 return;
             info.cancelled = true;
-            if (event.axis != WL_POINTER_AXIS_VERTICAL_SCROLL || event.delta == 0)
+            if (event.axis != WL_POINTER_AXIS_VERTICAL_SCROLL)
                 return;
+            if (event.delta == 0) {
+                if (event.source == WL_POINTER_AXIS_SOURCE_FINGER)
+                    settleRolodex();
+                return;
+            }
             const auto now = std::chrono::steady_clock::now();
             if (now - rolodexLastScroll > std::chrono::milliseconds(250) || event.delta * rolodexScroll < 0)
                 rolodexScroll = 0;
@@ -1476,4 +1527,22 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
     workspaceMoveHook = Event::bus()->m_events.window.moveToWorkspace.listen([this](PHLWINDOW window, PHLWORKSPACE workspace) { onWindowMoveToWorkspace(window, workspace); });
 
     enterSubmapIfEnabled();
+    if (rolodex) {
+        const auto key = overviewMonitorKey(pMonitor.lock());
+        const auto generation = m_sessionGeneration;
+        rolodexTimer = makeShared<CEventLoopTimer>(std::chrono::milliseconds(16),
+            [key, generation](SP<CEventLoopTimer> self, void*) {
+                auto* overview = dynamic_cast<COverview*>(overviewForSession(key, generation));
+                if (!overview || overview->closing) {
+                    self->cancel();
+                    return;
+                }
+                overview->tickRolodex();
+                if (overviewForSession(key, generation) == overview && !overview->closing)
+                    self->updateTimeout(std::chrono::milliseconds(16));
+                else
+                    self->cancel();
+            }, nullptr);
+        g_pEventLoopManager->addTimer(rolodexTimer);
+    }
 }

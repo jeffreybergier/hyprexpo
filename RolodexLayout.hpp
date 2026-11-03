@@ -40,6 +40,20 @@ inline Card card(int index, double position, int count, double width, double hei
             width * scale, height * scale, std::clamp(-d * 0.58, -1.1, 1.1), depth,
             width > 0 && height > 0 && std::abs(d) < 2.6};
 }
+inline Card blend(const Card& from, const Card& to, double progress) {
+    const double t = std::clamp(progress, 0.0, 1.0);
+    const auto mix = [t](double a, double b) { return a + (b - a) * t; };
+    return {mix(from.cx, to.cx), mix(from.cy, to.cy), mix(from.width, to.width),
+            mix(from.height, to.height), mix(from.tilt, to.tilt), mix(from.depth, to.depth),
+            t == 0 ? from.visible : (t == 1 ? to.visible : from.visible || to.visible)};
+}
+inline Card desktop(double width, double height) {
+    return {width / 2, height / 2, width, height, 0, 1, true};
+}
+inline double fingerPosition(double position, double delta, double units, int count) {
+    if (count <= 0 || !std::isfinite(delta)) return position;
+    return std::remainder(position + delta / std::max(1.0, units), static_cast<double>(count));
+}
 inline double interpolate(double from, double to, double elapsed) {
     const double t = std::clamp(elapsed / 0.24, 0.0, 1.0);
     return from + (to - from) * (1.0 - std::pow(1.0 - t, 3));

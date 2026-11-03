@@ -39,6 +39,28 @@ int main() {
             }
         }
     }
+    assert(fingerPosition(0, 24, 96, 10) == 0.25);
+    assert(fingerPosition(0.25, -24, 96, 10) == 0);
+    assert(fingerPosition(9, 192, 96, 10) == 1);
+    assert(fingerPosition(0, 1000000, 96, 10) < 10);
+    assert(fingerPosition(0, 100, 96, 1) == std::remainder(100.0 / 96, 1.0));
+    assert(fingerPosition(3, 10, 96, 0) == 3);
+    const auto full = desktop(1920, 1080);
+    const auto partial = card(0, 0.35, 10, 1920, 1080);
+    const auto openingStart = blend(full, partial, 0);
+    const auto openingEnd = blend(full, partial, 1);
+    assert(openingStart.row(0).left == 0 && openingStart.row(0).y == 0);
+    assert(openingStart.row(1).right == 1920 && openingStart.row(1).y == 1080);
+    assert(openingEnd.width == partial.width && openingEnd.tilt == partial.tilt);
+    const auto interrupted = blend(full, partial, 0.4);
+    const auto closeStart = blend(interrupted, full, 0);
+    const auto closeEnd = blend(interrupted, full, 1);
+    assert(closeStart.width == interrupted.width && closeStart.cy == interrupted.cy);
+    assert(closeEnd.width == full.width && closeEnd.tilt == 0);
+    for (int i = 0; i <= 100; ++i) {
+        const auto c = blend(partial, full, i / 100.0);
+        assert(c.row(1).y > c.row(0).y && c.row(0).right > c.row(0).left);
+    }
     const auto front = card(0, 0, 10, 1920, 1080);
     assert(front.tilt == 0 && front.depth == 1 && front.visible);
     assert(card(1, 0, 10, 1920, 1080).cy > front.cy);

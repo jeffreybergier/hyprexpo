@@ -609,6 +609,8 @@ bool COverview::onKbMoveFocus(const std::string& dir) {
 bool COverview::onKbConfirm() {
     if (closing)
         return false;
+    if (rolodex)
+        settleRolodex();
     ensureKbFocusInitialized();
     if (!isTileValid(kbFocusID))
         return false;

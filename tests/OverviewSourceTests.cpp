@@ -1011,6 +1011,15 @@ int main() {
     expectOrder(activationListener, "info.cancelled = true", "createOverview(monitor)", "activation consumes before installing overview listeners");
     expectContains(activationListener, "seedRolodexScroll(*remainder)", "activation passes excess movement exactly once");
     expectContains(source, "seedRolodexScroll(event.delta)", "activation and existing finger scrolling share the rotation accumulator");
+    const auto rolodexTick = extractFunction(source, "void COverview::tickRolodex()");
+    expectContains(rolodexTick, "milliseconds(120)", "finger scrolling settles after idle when no stop event arrives");
+    for (const auto& guard : {"isSessionLocked()", "isInhibited()", "isCaptured()", "rolodexReleaseArmed", "getModsFromAllKBs()"})
+        expectContains(rolodexTick, guard, "release selection checks " + std::string{guard});
+    expectOrder(rolodexTick, "rolodexReleaseArmed = false", "closeOverviewsSelecting(this)", "release confirmation is one-shot");
+    expectContains(source, "rolodexTimer->cancel()", "teardown cancels the owned input timer");
+    expectContains(source, "overviewForSession(key, generation)", "input timer callbacks are generation fenced");
+    expectContains(source, "event.delta == 0", "axis-stop events settle continuous rotation");
+    expectContains(source, "rolodex && !swipe", "release confirmation never takes ownership from expo swipe gestures");
     expectAbsent(source, "m_events.input.touch.cancel.listen", "grid mode does not install scrolling cancel ownership");
 
     expectContains(configHeader, "SCROLLING_INPUT_DEBUG_DEFAULT", "synthetic input is default-disabled");

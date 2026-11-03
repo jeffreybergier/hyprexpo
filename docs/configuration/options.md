@@ -143,6 +143,17 @@ exceeds `m * W * H`, every target is scaled by the same square-root factor, with
 a 16-pixel minimum fallback. This bounds GPU memory without dropping offscreen
 columns from the overview. See [Scrolling Overview](../guides/scrolling-overview).
 
+### Local Rolodex interaction
+
+This fork's `rolodex = 1` mode supports continuous two-finger scrolling and a
+desktop/card transition. Its session-scoped options (under `plugin:hyprexpo:`) are
+`rolodex_continuous = 1`, `rolodex_scroll_distance = 96`,
+`rolodex_transition = 1`, and optional `rolodex_release_super = 0`.
+Set the last option to `1` to select on Super release when Super was held at
+entry. Escape/right-click cancel; entry without Super remains persistent.
+Setting continuous/transition to `0` restores stepping/fading respectively.
+See [Rolodex interaction options](../rolodex-prototype.md#interaction-options).
+
 ### Trackpad gesture
 
 `gesture_fingers` and `gesture_direction` register the interactive, follow-your-finger `expo` gesture from plain config. They remain expo-only; registering the `cancel` action requires [`hl.plugin.hyprexpo.gesture{}`](../guides/lua-gestures.md) in a Lua config. Hyprland selects either hyprlang or Lua for the whole config and a `.lua` cannot be sourced from a `.conf`, so hyprlang users need these keys to reach the expo gesture at all.

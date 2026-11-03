@@ -44,6 +44,10 @@ void registerHyprexpoConfigValues() {
     addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:wallpaper_bg", "draw the monitor wallpaper behind overview tiles", HyprexpoConfig::WALLPAPER_BG_DEFAULT));
 
     addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:rolodex", "experimental vertical workspace rolodex", 0));
+    addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:rolodex_continuous", "finger-following rolodex scrolling", 1));
+    addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:rolodex_scroll_distance", "finger-axis units per workspace", 96));
+    addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:rolodex_transition", "morph desktop into and out of rolodex", 1));
+    addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:rolodex_release_super", "select on Super release when held at entry", 0));
     addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:columns", "columns", HyprexpoConfig::COLUMNS_DEFAULT));
     addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:rows", "fixed grid rows (0 follows columns)", HyprexpoConfig::ROWS_DEFAULT));
     addConfigValue(makeShared<Config::Values::CIntValue>("plugin:hyprexpo:gaps_in", "inner gaps", HyprexpoConfig::GAPS_IN_DEFAULT));

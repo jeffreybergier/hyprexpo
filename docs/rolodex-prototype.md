@@ -14,9 +14,19 @@ columns/rows/workspace_method settings (use 5 columns, 2 rows for ten desktops).
 
 - Uses the existing compositor-side workspace captures, not text placeholders.
 - Perspective tilt around a horizontal axis; up to five cards are visible.
-- 240ms eased rotation, interruptible and wrapping at either end.
-- Wheel scrolling rotates one slot per event; finger-axis scrolling accumulates
-  a 24-unit threshold. Works without holding a modifier once opened.
+- Finger-following rotation, wrapping at either end: 96 axis units per workspace
+  by default. Axis stop or 120ms idle snaps to the nearest selectable workspace
+  with a 240ms eased animation. New input interrupts the snap at its visible position.
+- Wheel and keyboard navigation retain discrete, animated steps. Finger scrolling
+  also works without a modifier once opened.
+- Desktop-to-card entry and card-to-desktop exit use the compositor's windowsMove
+  animation. Closing captures the visible geometry, including interrupted entry
+  or fractional rotation, so confirming does not first jump to an upright card.
+- Optional release-Super selection arms only when Super is held at entry, on the
+  pointer's monitor, and not during an expo swipe gesture. It confirms the nearest
+  selectable card when neither Super key remains held. Escape/right-click cancel
+  first and cannot be overridden by a subsequent release. Locking, shortcut
+  inhibition, or input capture disarms release selection.
 - Up/down (or left/right) keyboard navigation rotates.
 - Click a rear card to bring it forward; click the selected card or Enter to
   select. Right-click or Escape cancels without switching workspaces.
@@ -31,10 +41,8 @@ profiling before daily use. The selected card has a single texture draw.
 The previews inherit HyprExpo's capture/refresh behavior; they are not promised
 to be continuous video streams of all inactive applications.
 
-Entry/exit uses a basic fade rather than a seamless desktop-to-card transition.
-No release-Super-to-confirm or continuous finger-following rotation is implemented.
-Super + vertical two-finger scrolling now opens Rolodex after 8 units of
-movement. Excess movement feeds the existing 24-unit rotation accumulator,
+Super + vertical two-finger scrolling opens Rolodex after 8 units of
+movement. Excess movement feeds the same finger-following input handler,
 so the same uninterrupted gesture continues navigating after entry. Activation
 consumes the input before creating the overview, preventing double processing
 and scrolling of the application underneath. Plain scrolling remains untouched
@@ -44,6 +52,22 @@ workspaces, and existing overview sessions are excluded. Pending activation
 resets on direction reversal, a 250ms gap, axis stop, keyboard activity, monitor
 change, or config reload. Rotated outputs and simultaneous
 mixed-scale multi-monitor Rolodex sessions remain unverified.
+
+## Interaction options
+
+These options are read when a session opens; changing them affects the next overview.
+All are under `plugin:hyprexpo:` (Lua: fields in `plugin.hyprexpo`).
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `rolodex_continuous` | `1` | Finger-following rotation; `0` restores the 24-unit stepping behavior |
+| `rolodex_scroll_distance` | `96` | Axis units per workspace in continuous mode; lower is faster, minimum 1 |
+| `rolodex_transition` | `1` | Desktop/card morph; `0` restores the original fade |
+| `rolodex_release_super` | `0` | Confirm on Super release if held at entry; enabled in this laptop's config |
+
+Super+Tab now also arms release selection when that option is enabled. Use the
+Mission Control key or bar button with Super released to open a persistent view.
+Click/Enter selection and Escape/right-click cancellation remain available.
 
 ## Build and test
 
@@ -114,6 +138,27 @@ For full binary rollback, first remove the `rolodex` config key, close the
 overview, unload the installed plugin, use `sudo install -m 755` to restore that
 original binary to the hyprpm path, load it, and reload the configuration. Never
 overwrite a mapped plugin in place. Sync config edits with chezmoi.
+
+## Fluid interaction validation
+
+Tested against 0.56.2 in a disposable Wayland-backed compositor:
+
+- Super + finger deltas `4,4,24,24,24,24` opens, advances one workspace,
+  and selects on modifier release without an Enter/click.
+- `-104` opens and advances backward; `32` opens but snaps back to the
+  original workspace (8 activation + 24/96 of a rotation).
+- Release selection disabled: releasing Super leaves the view open; Enter
+  confirms the nearest workspace after the idle snap.
+- Continuous rotation disabled: `32` once again opens and advances one slot.
+- Cancel while Super remains held, then release: stays on the opening workspace.
+- IPC/button-style entry without Super stays open; later modifier release does
+  not acquire selection ownership.
+- Inspected screenshots of entry, the settled view, fractional rotation, and
+  exit with a real terminal workspace. Pure tests check fullscreen endpoints,
+  fractional movement/reversal/wraparound, and interrupted morph continuity.
+
+Physical feel and high-resolution frame pacing still require user validation.
+The original discrete-mode smoke results below describe the preceding build.
 
 ## Smoke-test results
 

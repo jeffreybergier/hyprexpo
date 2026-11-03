@@ -5,6 +5,7 @@
 #include "globals.hpp"
 #include "IOverviewSession.hpp"
 #include "HyprexpoLogic.hpp"
+#include "RolodexLayout.hpp"
 #include <hyprland/src/desktop/DesktopTypes.hpp>
 #include <hyprland/src/render/Framebuffer.hpp>
 #include <hyprland/src/render/Texture.hpp>
@@ -111,6 +112,11 @@ class COverview final : public IOverviewSession {
 
   private:
     double     rolodexPosition() const;
+    void       settleRolodex();
+    void       updateRolodexFocus();
+    void       tickRolodex();
+    double     rolodexOverviewAmount() const;
+    Hyprexpo::Rolodex::Card rolodexCard(int id) const;
     bool       stepRolodex(int direction);
     void       renderRolodex();
     int        rolodexHit(const Vector2D& point) const;
@@ -145,6 +151,15 @@ class COverview final : public IOverviewSession {
 
     // Opt-in per session; the original grid remains the default.
     bool       rolodex = false;
+    bool       rolodexContinuous = false;
+    bool       rolodexTracking = false;
+    bool       rolodexTransition = false;
+    bool       rolodexReleaseArmed = false;
+    double     rolodexScrollDistance = 96;
+    int        rolodexCloseID = -1;
+    double     rolodexCloseAmount = 1;
+    std::vector<Hyprexpo::Rolodex::Card> rolodexCloseCards;
+    SP<CEventLoopTimer> rolodexTimer;
     double     rolodexFrom = 0;
     double     rolodexGoal = 0;
     double     rolodexScroll = 0;
