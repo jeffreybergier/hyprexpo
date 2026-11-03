@@ -1020,6 +1020,15 @@ int main() {
     expectContains(source, "overviewForSession(key, generation)", "input timer callbacks are generation fenced");
     expectContains(source, "event.delta == 0", "axis-stop events settle continuous rotation");
     expectContains(source, "rolodex && !swipe", "release confirmation never takes ownership from expo swipe gestures");
+    const auto rolodexAnimation = extractFunction(source, "void COverview::configureRolodexAnimation()");
+    expectContains(rolodexAnimation, "ANIMATION_SECONDS * 10", "Rolodex uses its own 300ms compositor timing");
+    expectContains(rolodexAnimation, "internalEnabled", "Rolodex retains the inherited animation-enabled setting");
+    expectContains(source, "rolodex ? rolodexAnimationConfig", "ordinary grid animations retain their original config");
+    const auto rolodexProgress = extractFunction(renderSource, "double COverview::rolodexCloseProgress()");
+    expectContains(rolodexProgress, "size->getCurveValue()", "fullscreen expansion uses eased progress, not raw elapsed time");
+    const auto rolodexRender = extractFunction(renderSource, "void COverview::renderRolodex()");
+    expectAbsent(rolodexRender, "size->getPercent()", "Rolodex opacity stays synchronized with eased geometry");
+    expectOrder(rolodexRender, "if (box.w < 1 || box.h < 1)", "renderTextureInternal", "subpixel strips are discarded before texture and border drawing");
     expectAbsent(source, "m_events.input.touch.cancel.listen", "grid mode does not install scrolling cancel ownership");
 
     expectContains(configHeader, "SCROLLING_INPUT_DEBUG_DEFAULT", "synthetic input is default-disabled");

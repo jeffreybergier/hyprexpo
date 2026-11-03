@@ -16,11 +16,14 @@ columns/rows/workspace_method settings (use 5 columns, 2 rows for ten desktops).
 - Perspective tilt around a horizontal axis; up to five cards are visible.
 - Finger-following rotation, wrapping at either end: 96 axis units per workspace
   by default. Axis stop or 120ms idle snaps to the nearest selectable workspace
-  with a 240ms eased animation. New input interrupts the snap at its visible position.
+  with a 300ms ease-out animation. New input interrupts the snap at its visible position.
 - Wheel and keyboard navigation retain discrete, animated steps. Finger scrolling
   also works without a modifier once opened.
-- Desktop-to-card entry and card-to-desktop exit use the compositor's windowsMove
-  animation. Closing captures the visible geometry, including interrupted entry
+- Entry, exit, snapping, and keyboard/wheel steps all use 300ms timing with a
+  strong ease-out. Entry/exit use a plugin-owned ease-out Bezier rather than
+  inheriting the user's windowsMove speed or spring; its enabled/disabled setting
+  is still respected. Exit geometry and opacity use the actual eased curve value,
+  not raw elapsed time. Closing captures the visible geometry, including interrupted entry
   or fractional rotation, so confirming does not first jump to an upright card.
 - Optional release-Super selection arms only when Super is held at entry, on the
   pointer's monitor, and not during an expo swipe gesture. It confirms the nearest
@@ -156,6 +159,13 @@ Tested against 0.56.2 in a disposable Wayland-backed compositor:
 - Inspected screenshots of entry, the settled view, fractional rotation, and
   exit with a real terminal workspace. Pure tests check fullscreen endpoints,
   fractional movement/reversal/wraparound, and interrupted morph continuity.
+
+The 300ms timing follow-up passed repeated forward/backward release selections
+400ms apart and config reload while open in a disposable compositor. A small
+nested output exposed a pre-existing zero-height raster-strip assertion; such
+strips are now discarded before drawing textures or borders. Regression tests
+cover duration/endpoints, monotonically decelerating easing, the dedicated
+animation config, eased exit progress, and the degenerate-strip guard.
 
 Physical feel and high-resolution frame pacing still require user validation.
 The original discrete-mode smoke results below describe the preceding build.

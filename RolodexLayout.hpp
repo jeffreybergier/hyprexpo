@@ -6,6 +6,11 @@
 // Pure, output-independent geometry. Coordinates are logical pixels; callers
 // apply output scale only at the renderer boundary.
 namespace Hyprexpo::Rolodex {
+inline constexpr double ANIMATION_SECONDS = 0.3;
+inline double easeOut(double progress) {
+    const double t = std::clamp(progress, 0.0, 1.0);
+    return 1.0 - std::pow(1.0 - t, 5);
+}
 inline double distance(double index, double position, int count) {
     if (count <= 0) return 0;
     return std::remainder(index - position, static_cast<double>(count));
@@ -55,7 +60,6 @@ inline double fingerPosition(double position, double delta, double units, int co
     return std::remainder(position + delta / std::max(1.0, units), static_cast<double>(count));
 }
 inline double interpolate(double from, double to, double elapsed) {
-    const double t = std::clamp(elapsed / 0.24, 0.0, 1.0);
-    return from + (to - from) * (1.0 - std::pow(1.0 - t, 3));
+    return from + (to - from) * easeOut(elapsed / ANIMATION_SECONDS);
 }
 } // namespace Hyprexpo::Rolodex

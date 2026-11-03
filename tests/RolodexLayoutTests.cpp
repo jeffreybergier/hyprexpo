@@ -21,7 +21,17 @@ int main() {
     assert(!activation.update(4, 1450, true));
     assert(wrap(-1, 10) == 9 && wrap(10, 10) == 0 && wrap(0, 0) == -1);
     assert(distance(0, 9, 10) == 1 && distance(9, 0, 10) == -1);
-    assert(interpolate(0, 1, 0) == 0 && interpolate(0, 1, 0.24) == 1);
+    assert(ANIMATION_SECONDS == 0.3);
+    assert(interpolate(0, 1, 0) == 0 && interpolate(0, 1, 0.3) == 1);
+    assert(interpolate(0, 1, 0.24) < 1);
+    assert(interpolate(0, 1, 0.15) > 0.95);
+    assert(easeOut(-1) == 0 && easeOut(2) == 1);
+    double lastIncrement = 1;
+    for (int i = 1; i <= 100; ++i) {
+        const double increment = easeOut(i / 100.0) - easeOut((i - 1) / 100.0);
+        assert(increment >= 0 && increment <= lastIncrement);
+        lastIncrement = increment;
+    }
     assert(interpolate(0, 1, 0.1) > 0 && interpolate(0, 1, 0.1) < 1);
     assert(interpolate(2, -1, 1) == -1);
     for (int count : {1, 2, 3, 10, 50}) {

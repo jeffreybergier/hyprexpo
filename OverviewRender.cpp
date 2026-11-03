@@ -304,6 +304,12 @@ double COverview::rolodexOverviewAmount() const {
     return std::abs(span) < 0.001 ? 1 : std::clamp(1.0 - (size->value().x - mon->m_size.x) / span, 0.0, 1.0);
 }
 
+double COverview::rolodexCloseProgress() const {
+    // getPercent() is elapsed time, not the curve value. Using it here made
+    // expansion linear even when entry and window animations were eased.
+    return std::clamp(static_cast<double>(size->getCurveValue()), 0.0, 1.0);
+}
+
 Hyprexpo::Rolodex::Card COverview::rolodexCard(int id) const {
     const auto mon = pMonitor.lock();
     if (!mon) return {};
@@ -312,7 +318,7 @@ Hyprexpo::Rolodex::Card COverview::rolodexCard(int id) const {
     const auto desktop = Hyprexpo::Rolodex::desktop(mon->m_size.x, mon->m_size.y);
     if (closing && id < static_cast<int>(rolodexCloseCards.size())) {
         const auto& start = rolodexCloseCards[id];
-        return id == rolodexCloseID ? Hyprexpo::Rolodex::blend(start, desktop, size->getPercent()) : start;
+        return id == rolodexCloseID ? Hyprexpo::Rolodex::blend(start, desktop, rolodexCloseProgress()) : start;
     }
     return id == openedID ? Hyprexpo::Rolodex::blend(desktop, card, rolodexOverviewAmount()) : card;
 }
@@ -355,8 +361,8 @@ void COverview::renderRolodex() {
     const auto mon = pMonitor.lock();
     if (!mon) return;
     const double position = rolodexPosition();
-    const float fade = rolodexTransition ? (closing ? rolodexCloseAmount * (1.0f - size->getPercent()) : rolodexOverviewAmount()) :
-        (closing ? 1.0f - size->getPercent() : size->getPercent());
+    const float fade = rolodexTransition ? (closing ? rolodexCloseAmount * (1.0 - rolodexCloseProgress()) : rolodexOverviewAmount()) :
+        (closing ? 1.0 - rolodexCloseProgress() : size->getCurveValue());
     const int anchor = closing ? rolodexCloseID : openedID;
     struct Tile { int id; Hyprexpo::Rolodex::Card card; };
     std::vector<Tile> tiles;
@@ -379,8 +385,8 @@ void COverview::renderRolodex() {
         if (rolodexTransition) {
             if (closing) {
                 const float startOpacity = tile.id == openedID ? 1.0f : rolodexCloseAmount;
-                opacity = tile.id == anchor ? startOpacity + (1.0f - startOpacity) * size->getPercent() :
-                    startOpacity * (1.0f - size->getPercent());
+                opacity = tile.id == anchor ? startOpacity + (1.0f - startOpacity) * rolodexCloseProgress() :
+                    startOpacity * (1.0 - rolodexCloseProgress());
             } else if (tile.id == anchor)
                 opacity = 1.0f;
         }
@@ -395,6 +401,10 @@ void COverview::renderRolodex() {
             CBox box{middle.left * mon->m_scale, std::floor(top.y * mon->m_scale),
                      (middle.right - middle.left) * mon->m_scale,
                      std::floor(bottom.y * mon->m_scale) - std::floor(top.y * mon->m_scale)};
+            // Small outputs / nearly edge-on cards can rasterize a strip to
+            // zero height. Hyprland rejects degenerate border rectangles.
+            if (box.w < 1 || box.h < 1)
+                continue;
             Render::GL::g_pHyprOpenGL->renderTextureInternal(images[tile.id].fb->getTexture(), box,
                 {.damage = &damageRegion, .a = opacity * static_cast<float>(0.55 + tile.card.depth * 0.45),
                  .allowCustomUV = true, .primarySurfaceUVTopLeft = {0.0, v0}, .primarySurfaceUVBottomRight = {1.0, v1}});

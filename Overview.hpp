@@ -34,6 +34,8 @@ class COverview final : public IOverviewSession {
     void onDamageReported() override;
     void onPreRender() override;
     void onConfigReload() override {
+        if (rolodex)
+            configureRolodexAnimation();
         onDamageReported();
     }
     void prepareForTeardown() override {}
@@ -116,6 +118,8 @@ class COverview final : public IOverviewSession {
     void       updateRolodexFocus();
     void       tickRolodex();
     double     rolodexOverviewAmount() const;
+    double     rolodexCloseProgress() const;
+    void       configureRolodexAnimation();
     Hyprexpo::Rolodex::Card rolodexCard(int id) const;
     bool       stepRolodex(int direction);
     void       renderRolodex();
@@ -160,6 +164,7 @@ class COverview final : public IOverviewSession {
     double     rolodexCloseAmount = 1;
     std::vector<Hyprexpo::Rolodex::Card> rolodexCloseCards;
     SP<CEventLoopTimer> rolodexTimer;
+    SP<Hyprutils::Animation::SAnimationPropertyConfig> rolodexAnimationConfig;
     double     rolodexFrom = 0;
     double     rolodexGoal = 0;
     double     rolodexScroll = 0;

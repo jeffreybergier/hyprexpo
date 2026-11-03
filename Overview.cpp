@@ -1070,6 +1070,21 @@ Vector2D COverview::zoomSizeForCurrentGrid(const Vector2D& monitorSize) const {
     return {monitorSize.x * monitorSize.x / tileSize.w, monitorSize.y * monitorSize.y / tileSize.h};
 }
 
+void COverview::configureRolodexAnimation() {
+    // Own the timing instead of inheriting the user's (possibly spring-based)
+    // windowsMove animation. Re-register after config reload clears curves.
+    constexpr auto CURVE = "hyprexpo-rolodex-ease-out";
+    Animation::mgr()->addBezierWithName(CURVE, {0.23, 1.0}, {0.32, 1.0});
+    if (!rolodexAnimationConfig)
+        rolodexAnimationConfig = makeShared<Hyprutils::Animation::SAnimationPropertyConfig>();
+    rolodexAnimationConfig->pValues = rolodexAnimationConfig;
+    rolodexAnimationConfig->internalBezier = CURVE;
+    // Hyprland speed units are tenths of a second.
+    rolodexAnimationConfig->internalSpeed = Hyprexpo::Rolodex::ANIMATION_SECONDS * 10;
+    const auto inherited = Config::animationTree()->getAnimationPropertyConfig("windowsMove")->pValues.lock();
+    rolodexAnimationConfig->internalEnabled = inherited ? inherited->internalEnabled : 1;
+}
+
 void COverview::seedRolodexScroll(double delta) {
     if (!rolodex || closing)
         return;
@@ -1366,8 +1381,11 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
     Animation::Workspace::startAnimation(startedOn, Animation::Workspace::ANIMATION_TYPE_IN, true, true);
 
     const auto initSize = zoomSizeForCurrentGrid(pMonitor->m_size);
-    Animation::mgr()->createAnimation(initSize, size, Config::animationTree()->getAnimationPropertyConfig("windowsMove"), AVARDAMAGE_NONE);
-    Animation::mgr()->createAnimation(-(tilePosForID(currentid, initSize, 0.0) * pMonitor->m_scale), pos, Config::animationTree()->getAnimationPropertyConfig("windowsMove"), AVARDAMAGE_NONE);
+    if (rolodex)
+        configureRolodexAnimation();
+    const auto animationConfig = rolodex ? rolodexAnimationConfig : Config::animationTree()->getAnimationPropertyConfig("windowsMove");
+    Animation::mgr()->createAnimation(initSize, size, animationConfig, AVARDAMAGE_NONE);
+    Animation::mgr()->createAnimation(-(tilePosForID(currentid, initSize, 0.0) * pMonitor->m_scale), pos, animationConfig, AVARDAMAGE_NONE);
 
     size->setUpdateCallback(damageMonitor);
     pos->setUpdateCallback(damageMonitor);
