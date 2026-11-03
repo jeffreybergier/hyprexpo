@@ -12,6 +12,17 @@
 #include "IOverviewSession.hpp"
 #include "OverviewCapture.hpp"
 #include "PluginConfig.hpp"
+#include "RolodexActivation.hpp"
+#include "HyprlandConfigCompat.hpp"
+#include "ScrollingLayoutAdapter.hpp"
+#include <hyprland/src/managers/input/InputManager.hpp>
+#include <hyprland/src/managers/KeybindManager.hpp>
+#include <hyprland/src/managers/SessionLockManager.hpp>
+#include <hyprland/src/protocols/ShortcutsInhibit.hpp>
+#include <hyprland/src/protocols/InputCapture.hpp>
+#include <hyprland/src/state/MonitorState.hpp>
+#include <hyprland/src/layout/LayoutManager.hpp>
+#include <hyprland/src/layout/supplementary/DragController.hpp>
 #include <stdexcept>
 #include <string>
 
@@ -125,7 +136,35 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
             destroyOverview(OV);
     });
 
+    static Hyprexpo::RolodexActivation activation;
+    static PHLMONITORREF activationMonitor;
+    static auto PAXIS = Event::bus()->m_events.input.mouse.axis.listen([](const IPointer::SAxisEvent& event, Event::SCallbackInfo& info) {
+        const auto monitor = State::monitorState()->query().vec(g_pInputManager->getMouseCoordsInternal()).run();
+        if (activationMonitor.lock() != monitor)
+            activation.reset();
+        activationMonitor = monitor;
+        const bool eligible = !info.cancelled && !overviewOpen() && monitor && monitor->m_activeWorkspace &&
+            CompatHyprlandAPI::intValue("plugin:hyprexpo:rolodex") != 0 &&
+            event.source == WL_POINTER_AXIS_SOURCE_FINGER && event.axis == WL_POINTER_AXIS_VERTICAL_SCROLL &&
+            g_pInputManager->getModsFromAllKBs() == g_pKeybindManager->stringToModMask("SUPER") &&
+            g_pKeybindManager->getCurrentSubmap().name.empty() && !g_pSessionLockManager->isSessionLocked() &&
+            !PROTO::shortcutsInhibit->isInhibited() && !PROTO::inputCapture->isCaptured() && !g_layoutManager->dragController()->target() &&
+            !Hyprexpo::Scrolling::workspaceUsesScrollingLayout(monitor->m_activeWorkspace);
+        const auto remainder = activation.update(event.delta,
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(), eligible);
+        if (!eligible)
+            return;
+        // Consume before creation: a newly registered overview listener must not
+        // process this same event again, nor may the underlying client see it.
+        info.cancelled = true;
+        if (remainder) {
+            if (auto* overview = createOverview(monitor))
+                overview->seedRolodexScroll(*remainder);
+        }
+    });
+
     static auto PKEY = Event::bus()->m_events.input.keyboard.key.listen([](IKeyboard::SKeyEvent event, Event::SCallbackInfo& info) {
+        activation.reset();
         if (shouldCancelOverview(event)) {
             info.cancelled = true;
             closeOverviews(false);
@@ -137,6 +176,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     });
 
     static auto PCFG = Event::bus()->m_events.config.reloaded.listen([]() {
+        activation.reset();
         Hyprexpo::Capture::notifyOverviewCaptureConfigReload();
         forEachOverview([](IOverviewSession& overview) { overview.onConfigReload(); });
         syncExpoGestureFromConfig();

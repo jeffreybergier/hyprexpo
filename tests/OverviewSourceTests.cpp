@@ -1003,6 +1003,14 @@ int main() {
     expectContains(source, "if (rolodex)\n        mouseAxisHook = Event::bus()->m_events.input.mouse.axis.listen",
                    "only opt-in rolodex sessions install axis ownership; ordinary grid does not");
     expectContains(source, "pointerOverview() != this", "rolodex axis ownership is monitor-local");
+    const auto activationListener = extractFunction(mainSource, "static auto PAXIS =");
+    for (const auto& guard : {"!overviewOpen()", "WL_POINTER_AXIS_SOURCE_FINGER", "WL_POINTER_AXIS_VERTICAL_SCROLL",
+                              "stringToModMask(\"SUPER\")", "getCurrentSubmap().name.empty()", "isSessionLocked()",
+                              "isInhibited()", "isCaptured()", "dragController()->target()", "workspaceUsesScrollingLayout"})
+        expectContains(activationListener, guard, "global rolodex activation respects " + std::string{guard});
+    expectOrder(activationListener, "info.cancelled = true", "createOverview(monitor)", "activation consumes before installing overview listeners");
+    expectContains(activationListener, "seedRolodexScroll(*remainder)", "activation passes excess movement exactly once");
+    expectContains(source, "seedRolodexScroll(event.delta)", "activation and existing finger scrolling share the rotation accumulator");
     expectAbsent(source, "m_events.input.touch.cancel.listen", "grid mode does not install scrolling cancel ownership");
 
     expectContains(configHeader, "SCROLLING_INPUT_DEBUG_DEFAULT", "synthetic input is default-disabled");

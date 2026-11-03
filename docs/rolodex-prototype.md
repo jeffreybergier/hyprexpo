@@ -32,8 +32,17 @@ The previews inherit HyprExpo's capture/refresh behavior; they are not promised
 to be continuous video streams of all inactive applications.
 
 Entry/exit uses a basic fade rather than a seamless desktop-to-card transition.
-No release-Super-to-confirm, continuous finger-following rotation, or global
-two-finger-scroll activation is implemented. Rotated outputs and simultaneous
+No release-Super-to-confirm or continuous finger-following rotation is implemented.
+Super + vertical two-finger scrolling now opens Rolodex after 8 units of
+movement. Excess movement feeds the existing 24-unit rotation accumulator,
+so the same uninterrupted gesture continues navigating after entry. Activation
+consumes the input before creating the overview, preventing double processing
+and scrolling of the application underneath. Plain scrolling remains untouched
+while closed. Only Super alone in the default submap activates it; session
+locks, shortcut inhibition, input capture, window drags, native scrolling-layout
+workspaces, and existing overview sessions are excluded. Pending activation
+resets on direction reversal, a 250ms gap, axis stop, keyboard activity, monitor
+change, or config reload. Rotated outputs and simultaneous
 mixed-scale multi-monitor Rolodex sessions remain unverified.
 
 ## Build and test
@@ -88,8 +97,9 @@ closing the overview and unloading the old plugin. Loaded it successfully,
 enabled `rolodex = 1` in `~/.config/hypr/hyprland.lua`, and verified opening and
 cancelling the native overview on the real display. Super+Tab, the Mission
 Control key, and the desktop bar overview button now open the native version.
-Super+mouse-wheel opens it for a mouse; a trackpad still requires a key/button
-to open, then finger-axis scrolling works inside. The Quickshell mockup was
+Super+mouse-wheel opens it for a mouse; Super + vertical two-finger scrolling
+opens it for a trackpad and continues rotating without lifting the fingers.
+The key/button entry paths remain available. The Quickshell mockup was
 removed. The existing login `hyprpm reload` loads the installed replacement.
 
 **A future `hyprpm update` or Hyprland upgrade can overwrite or invalidate this
@@ -114,7 +124,16 @@ session, then on its headless output:
 - Native workspace snapshots visually inspected at 1280x800.
 - Virtual-pointer protocol injection: wheel +15 advanced workspace 1 selection
   to 2; keyboard confirmation switched to 2.
-- Finger-axis -24 returned selection to 1; a pointer click selected it.
+- The original injector's claimed finger-axis -24 test actually sent wheel
+  input: Hyprland 0.56.2 resets the source when processing the virtual-pointer
+  `axis` request. For real finger-source testing, send `axis_source` after
+  `axis` and before `frame`.
+- Activation follow-up: a disposable 0.56.2 session with a virtual keyboard
+  holding Super and corrected finger-source injection opened on deltas 4,4
+  and rotated on the following 24, all in one stream. A single -32 event
+  opened and rotated backward exactly once (8 activation + 24 rotation).
+  Plain +32, Super +4, and Super +32 with Rolodex disabled did not open it.
+  These are synthetic checks, not physical trackpad feel validation.
 - Wheel -15 from workspace 1 wrapped to 10; confirmation created empty workspace
   10. Right-click after changing selection preserved workspace 10.
 - 6016x3384 headless output at scale 2 rendered and was captured successfully;

@@ -63,6 +63,7 @@ pkg_check_modules(deps REQUIRED IMPORTED_TARGET
     hyprland
     libdrm
     libinput
+    libeis-1.0
     libudev
     pangocairo
     pixman-1

@@ -1,8 +1,24 @@
 #include "../RolodexLayout.hpp"
+#include "../RolodexActivation.hpp"
 #include <cassert>
 #include <iostream>
 using namespace Hyprexpo::Rolodex;
 int main() {
+    Hyprexpo::RolodexActivation activation;
+    assert(!activation.update(3, 1000, true));
+    assert(activation.update(7, 1010, true).value() == 2);
+    assert(activation.update(-32, 1020, true).value() == -24);
+    assert(!activation.update(4, 1030, true));
+    assert(!activation.update(-4, 1040, true)); // reversal resets
+    assert(activation.update(-4, 1050, true).value() == 0);
+    assert(!activation.update(4, 1060, true));
+    assert(!activation.update(4, 1400, true)); // idle resets
+    assert(!activation.update(4, 1410, false)); // modifier/submap/lock resets
+    assert(!activation.update(4, 1420, true));
+    assert(!activation.update(0, 1430, true)); // axis stop resets
+    assert(!activation.update(4, 1440, true));
+    activation.reset();
+    assert(!activation.update(4, 1450, true));
     assert(wrap(-1, 10) == 9 && wrap(10, 10) == 0 && wrap(0, 0) == -1);
     assert(distance(0, 9, 10) == 1 && distance(9, 0, 10) == -1);
     assert(interpolate(0, 1, 0) == 0 && interpolate(0, 1, 0.24) == 1);

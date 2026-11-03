@@ -40,6 +40,8 @@ class COverview final : public IOverviewSession {
         return std::unexpected("active overview is not a scrolling session");
     }
 
+    // Used by activation and the in-overview listener; never replay an axis event.
+    void seedRolodexScroll(double delta) override;
     void setClosing(bool closing) override;
     void beginCancelSwipe() override;
     // True once close() has armed the teardown animation. Further gestures must

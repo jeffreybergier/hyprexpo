@@ -1065,6 +1065,17 @@ Vector2D COverview::zoomSizeForCurrentGrid(const Vector2D& monitorSize) const {
     return {monitorSize.x * monitorSize.x / tileSize.w, monitorSize.y * monitorSize.y / tileSize.h};
 }
 
+void COverview::seedRolodexScroll(double delta) {
+    if (!rolodex || closing)
+        return;
+    rolodexLastScroll = std::chrono::steady_clock::now();
+    rolodexScroll += delta;
+    if (std::abs(rolodexScroll) >= 24) {
+        stepRolodex(rolodexScroll > 0 ? 1 : -1);
+        rolodexScroll = 0;
+    }
+}
+
 COverview::~COverview() {
     if (redrawSettleTimer) {
         redrawSettleTimer->cancel();
@@ -1459,11 +1470,7 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
             if (event.source == WL_POINTER_AXIS_SOURCE_WHEEL) {
                 stepRolodex(event.delta > 0 ? 1 : -1);
             } else {
-                rolodexScroll += event.delta;
-                if (std::abs(rolodexScroll) >= 24) {
-                    stepRolodex(rolodexScroll > 0 ? 1 : -1);
-                    rolodexScroll = 0;
-                }
+                seedRolodexScroll(event.delta);
             }
         });
     workspaceMoveHook = Event::bus()->m_events.window.moveToWorkspace.listen([this](PHLWINDOW window, PHLWORKSPACE workspace) { onWindowMoveToWorkspace(window, workspace); });

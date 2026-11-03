@@ -26,6 +26,8 @@ class IOverviewSession {
     virtual std::expected<std::string, std::string> injectScrollingInput(const std::string& sequence) = 0;
     virtual void fullRender() = 0;
 
+    // Optional handoff from global finger-scroll activation (Rolodex only).
+    virtual void seedRolodexScroll(double delta) {}
     virtual void setClosing(bool closing) = 0;
     virtual void beginCancelSwipe() = 0;
     virtual bool closeCommitted() const = 0;
