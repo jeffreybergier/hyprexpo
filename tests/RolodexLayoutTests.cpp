@@ -75,6 +75,16 @@ int main() {
     assert(front.tilt == 0 && front.depth == 1 && front.visible);
     const auto next = card(1, 0, 10, 1920, 1080);
     assert(next.row(0).y < front.row(0).y && next.depth < front.depth);
+    double previousReveal = front.height * 0.20;
+    for (int id = 1; id <= 3; ++id) {
+        const auto ahead = card(id - 1, 0, 10, 1920, 1080);
+        const auto behind = card(id, 0, 10, 1920, 1080);
+        const double reveal = ahead.row(0).y - behind.row(0).y;
+        assert(behind.visible && behind.opacity == 1);
+        assert(behind.row(0).y > 0);
+        assert(std::abs(reveal - previousReveal) < 1e-6);
+        previousReveal *= 0.55;
+    }
     assert(!card(9, 0, 10, 1920, 1080).visible);
     assert(!card(5, 0, 10, 1920, 1080).visible);
     assert(front.row(1).y == front.cy && front.pivot == 1);

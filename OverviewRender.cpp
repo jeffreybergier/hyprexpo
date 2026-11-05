@@ -428,19 +428,6 @@ void COverview::renderRolodex() {
             }
         }
     }
-    if (isTileValid(kbFocusID)) {
-        auto& image = images[kbFocusID];
-        const Vector2D labelSize{std::min(900.0, mon->m_size.x * 0.9) * mon->m_scale, 64 * mon->m_scale};
-        if (!image.labelTexFocus) {
-            image.labelTexFocus = renderNumberTexture("Desktop " + std::to_string(image.workspaceID) +
-                (rolodexReleaseArmed ? "  |  Scroll to rotate\nRelease Super to select  |  Esc to cancel" :
-                 "  |  Scroll to rotate\nClick / Enter to select  |  Right-click / Esc to cancel"),
-                CHyprColor{0xffa8eaf0}, labelSize, mon->m_scale, 14);
-        }
-        CBox label{{(mon->m_transformedSize.x - labelSize.x) / 2, mon->m_transformedSize.y - labelSize.y}, labelSize};
-        if (image.labelTexFocus)
-            Render::GL::g_pHyprOpenGL->renderTexture(image.labelTexFocus, label, {.a = fade});
-    }
     if (std::abs(position - rolodexGoal) > 0.00001)
         damage();
 }

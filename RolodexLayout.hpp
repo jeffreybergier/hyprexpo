@@ -53,9 +53,14 @@ inline Card card(int index, double position, int count, double width, double hei
     // Lower the hinge as it rolls forward; this also offsets the initial
     // perspective expansion so the top edge peels down, never bobs upward.
     const double drop = 0.22 * turn + 0.30 * std::pow(turn, 3);
-    const double hinge = height * (0.86 - 0.065 * std::min(rear, 3.0) + drop);
-    const double tilt = turn * 1.48 - std::min(rear, 3.0) * 0.065;
-    const double rearLimit = std::min(3.0, static_cast<double>(count - 1));
+    const double tilt = turn * 1.48 - std::min(rear, 4.0) * 0.065;
+    // Lay out projected top edges explicitly: reveal roughly 20% of a
+    // card, then 55% of the preceding reveal for each deeper card. Reserve
+    // headroom above the front face so the entire fan fits on the output.
+    const double reveal = 0.20 * 0.70 * (1.0 - std::pow(0.55, rear)) / (1.0 - 0.55);
+    const double rearHeight = scale * std::cos(tilt) / (1.0 - std::sin(tilt) / 5.0);
+    const double hinge = height * (rear > 0 ? 0.28 - reveal + rearHeight : 0.98 + drop);
+    const double rearLimit = std::min(4.0, static_cast<double>(count - 1));
     // Introduce recycled cards gently at the back, including two-card stacks.
     const double opacity = rear > 0 ? std::clamp((rearLimit - rear) / 0.4, 0.0, 1.0) : 1.0;
     return {width / 2, hinge, width * scale, height * scale, tilt,
