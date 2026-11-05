@@ -43,7 +43,7 @@ int main() {
                 assert(std::isfinite(top.y) && bottom.y > top.y && top.right > top.left);
                 assert(std::abs(scaled.row(0).left - 3 * top.left) < 1e-6);
                 assert(!c.contains(-1, -1));
-                if (c.visible) assert(c.contains(c.cx, c.cy));
+                if (c.visible) assert(c.contains(c.cx, c.row(0.5).y));
                 assert(!c.contains(c.cx, bottom.y + 1));
                 for (int i = 0; i < 96; ++i) assert(c.row((i + 1) / 96.0).y > c.row(i / 96.0).y);
             }
@@ -73,8 +73,34 @@ int main() {
     }
     const auto front = card(0, 0, 10, 1920, 1080);
     assert(front.tilt == 0 && front.depth == 1 && front.visible);
-    assert(card(1, 0, 10, 1920, 1080).cy > front.cy);
-    assert(card(9, 0, 10, 1920, 1080).cy < front.cy);
+    const auto next = card(1, 0, 10, 1920, 1080);
+    assert(next.row(0).y < front.row(0).y && next.depth < front.depth);
+    assert(!card(9, 0, 10, 1920, 1080).visible);
     assert(!card(5, 0, 10, 1920, 1080).visible);
+    assert(front.row(1).y == front.cy && front.pivot == 1);
+    // The outgoing card stays in front throughout, even after selection moves
+    // to the incoming card. Its top travels down, uncovering that card.
+    for (int count : {2, 3, 10, 50}) {
+        double lastTop = card(0, 0, count, 1920, 1080).row(0).y;
+        for (int step = 1; step < 1000; ++step) {
+            const double p = step / 1000.0;
+            const auto outgoing = card(0, p, count, 1920, 1080);
+            const auto incoming = card(1, p, count, 1920, 1080);
+            assert(outgoing.depth > incoming.depth);
+            assert(outgoing.opacity == 1);
+            assert(outgoing.row(0).y > lastTop);
+            lastTop = outgoing.row(0).y;
+            // Same geometry when crossing the workspace wrap boundary.
+            const auto wrapped = card(count - 1, count - 1 + p, count, 1920, 1080);
+            assert(std::abs(wrapped.row(0).y - outgoing.row(0).y) < 1e-6);
+            const auto reverse = card(0, p - count, count, 1920, 1080);
+            assert(std::abs(reverse.row(0).y - outgoing.row(0).y) < 1e-6);
+        }
+        assert(lastTop > 1080); // recycling takes place offscreen
+        const auto recycled = card(0, 1, count, 1920, 1080);
+        assert(!recycled.visible && recycled.opacity == 0);
+    }
+    assert(!card(0, 0, 0, 1920, 1080).visible);
+    assert(!card(0, 0, 10, 0, 0).contains(0, 0));
     std::cout << "RolodexLayoutTests passed\n";
 }

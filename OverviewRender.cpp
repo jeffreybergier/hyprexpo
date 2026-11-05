@@ -390,6 +390,9 @@ void COverview::renderRolodex() {
             } else if (tile.id == anchor)
                 opacity = 1.0f;
         }
+        // Depth controls ordering, not alpha: translucent front cards expose
+        // the next workspace through them instead of physically uncovering it.
+        opacity *= tile.card.opacity;
         // Approximate a perspective trapezoid with UV-mapped horizontal strips.
         // Uses Hyprland's existing color-managed texture path, no raw GL state.
         const int strips = std::abs(tile.card.tilt) < 0.001 ? 1 : 96;
@@ -406,10 +409,10 @@ void COverview::renderRolodex() {
             if (box.w < 1 || box.h < 1)
                 continue;
             Render::GL::g_pHyprOpenGL->renderTextureInternal(images[tile.id].fb->getTexture(), box,
-                {.damage = &damageRegion, .a = opacity * static_cast<float>(0.55 + tile.card.depth * 0.45),
+                {.damage = &damageRegion, .a = opacity,
                  .allowCustomUV = true, .primarySurfaceUVTopLeft = {0.0, v0}, .primarySurfaceUVBottomRight = {1.0, v1}});
             CHyprColor edge = tile.id == kbFocusID ? CHyprColor{0xff72e0e8} : CHyprColor{0xff425269};
-            edge.a *= fade;
+            edge.a *= opacity;
             const double thickness = 2 * mon->m_scale;
             CBox left{box.x, box.y, thickness, box.h};
             CBox right{box.x + box.w - thickness, box.y, thickness, box.h};

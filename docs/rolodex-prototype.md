@@ -13,7 +13,15 @@ remain their own existing mode. The workspace list still comes from the normal
 columns/rows/workspace_method settings (use 5 columns, 2 rows for ten desktops).
 
 - Uses the existing compositor-side workspace captures, not text placeholders.
-- Perspective tilt around a horizontal axis; up to five cards are visible.
+- Bottom-hinged cards rather than a center-orbiting wheel: the active workspace
+  faces straight ahead, with upcoming cards fanned slightly above and behind it.
+  Advancing tips the front card forward and lowers it offscreen, uncovering the
+  next workspace. Reverse navigation retraces the same geometry.
+- Stable stack ordering throughout each turn; selection crossing the halfway
+  point does not swap overlapping faces. Card faces remain opaque rather than
+  showing other workspaces through them. Recycled cards enter gently at the rear
+  only after the outgoing face has moved below the viewport. Up to four cards
+  are visible; small workspace counts have fewer rear previews.
 - Finger-following rotation, wrapping at either end: 96 axis units per workspace
   by default. Axis stop or 120ms idle snaps to the nearest selectable workspace
   with a 300ms ease-out animation. New input interrupts the snap at its visible position.
