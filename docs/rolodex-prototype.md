@@ -75,20 +75,26 @@ mixed-scale multi-monitor Rolodex sessions remain unverified.
 The local Lua gesture action `rolodex` adds modifier-free continuous browsing:
 
 ```lua
-hl.plugin.hyprexpo.gesture({ fingers = 3, direction = "vertical", action = "rolodex" })
+hl.plugin.hyprexpo.gesture({ fingers = 3, direction = "vertical", action = "rolodex", scale = 1.25 })
 ```
 
 Hyprland chooses the vertical/horizontal gesture after its native recognition
 threshold. The vertical recognition event feeds rotation exactly once, and later
 updates continue driving the same overview generation on the original monitor.
 Up advances (matching natural scrolling), down reverses. Entry uses the existing
-animated desktop/card morph. Pausing with fingers held does not snap; lifting or
-cancellation settles without selecting or closing. Another stroke continues
-browsing. Click/Enter confirms, Escape/right-click cancels. A cancelled/closed
-session cannot be revived by late updates or by the gesture's end event.
+animated desktop/card morph. Pausing with fingers held does not snap; **lifting
+selects the nearest workspace card and closes the overview**. Compositor
+cancellation or loss of input ownership settles without selecting. Escape/right-click
+cancels. A cancelled/closed session cannot be revived by late updates or by the
+gesture's end event. Each subsequent desktop swipe opens a new selection session.
 
-The gesture uses `rolodex_scroll_distance`; its Lua `scale` optionally adjusts
-only three-finger speed. Super+wheel and Super+two-finger entry remain available.
+The gesture uses `rolodex_scroll_distance`; its Lua `scale` adjusts only
+three-finger speed. This laptop uses `1.25`, for 25% more rotation per swipe
+(equivalent to 153.6 raw swipe units per workspace at distance 192). Pointer speed,
+two-finger scrolling and Super+wheel are unchanged. The Mission Control/F3 key
+and overview button still open a persistent view for manual selection using
+scrolling, arrows, click/Enter, or Escape. A three-finger vertical swipe in that
+manual view opts into selection on lift too.
 Three-finger horizontal workspace swipes remain available on the desktop, but
 are consumed while a Rolodex is open, including its closing animation. The
 input hook classifies the cumulative motion before Hyprland's native gesture
@@ -96,9 +102,7 @@ recognition and latches the decision until lift/cancellation. Horizontal strokes
 cannot switch workspaces behind the cards or leak through after closing the
 overview mid-stroke. Vertical strokes still retain continuous browsing even
 when the fingers subsequently drift sideways. Other finger counts and other
-overview types are unaffected. Unlike modifier-held entry,
-this gesture deliberately leaves the overview open when fingers lift. Grid and
-native scrolling-layout modes reject it. Input safety and default-submap checks
+overview types are unaffected. Grid and native scrolling-layout modes reject it. Input safety and default-submap checks
 match the existing activation path (the active overview's `hyprexpo` submap is
 also allowed). Unloading finishes an active native swipe before its code is unmapped.
 
@@ -214,6 +218,30 @@ Source regression checks enforce native scene geometry, completion before
 resampling, direct small-FBO rendering, and local scratch-buffer lifetime.
 
 ## Three-finger gesture validation
+
+### Faster select-on-lift follow-up
+
+Passed native `CInputManager` injection in a disposable Hyprland 0.56.2 session
+with `scale = 1.25` and distance 192:
+
+- The same 80-unit upward swipe stays on the original card at scale 1 but selects
+  the next card at scale 1.25. A 153.6-unit stroke moves one full workspace.
+- Normal lift selects/closes, in either direction, including backward wrap,
+  reversal, multi-card movement, and discrete-mode fallback. Another desktop
+  swipe opens a fresh session. Held-finger pauses retain fractional movement.
+- Compositor cancellation, disarmed ownership, Escape before release, and stale
+  updates/releases after replacement never select. Reload during a held gesture
+  retains continuity and normal-lift selection.
+- F3-style manual entry stays open, with unchanged two-finger gain and explicit
+  Enter confirmation. A three-finger swipe inside it opts into lift selection.
+- All horizontal-suppression cases pass, including drift, cancellation, reload,
+  closure mid-stroke, selection's close animation, and normal desktop swiping.
+- Active plugin unload cancels without selecting; reload restores lift selection.
+  All four repository test suites pass and the native build has no warnings.
+
+### Original persistent-on-lift behavior
+
+These earlier checks describe the original release policy, superseded above.
 
 Tested the native `CTrackpadGestures` begin/update/end path against Hyprland
 0.56.2 in a disposable Lua-configured compositor. A temporary test-only plugin

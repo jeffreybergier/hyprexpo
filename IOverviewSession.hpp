@@ -29,10 +29,11 @@ class IOverviewSession {
     // Optional handoff from global finger-scroll activation (Rolodex only).
     virtual void seedRolodexScroll(double delta) {}
     // Native swipe ownership is separate from the grid's open/close swipe.
-    // Non-Rolodex sessions reject it; lift/cancel settles but never selects.
+    // Non-Rolodex sessions reject it. End reports ownership before settling,
+    // so only a live, uncancelled gesture may request selection on lift.
     virtual bool beginRolodexGesture() { return false; }
     virtual void updateRolodexGesture(double delta) {}
-    virtual void endRolodexGesture() {}
+    virtual bool endRolodexGesture() { return false; }
     virtual bool blocksHorizontalSwipes() const { return false; }
     virtual void setClosing(bool closing) = 0;
     virtual void beginCancelSwipe() = 0;

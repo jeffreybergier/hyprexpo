@@ -1054,8 +1054,16 @@ int main() {
     expectOrder(gestureUpdate, "OV->updateRolodexGesture(-e.swipe->delta.y * m_scale)", "if (m_firstUpdate)",
                 "Rolodex preserves first update, signed reversals, and gesture scale");
     const auto rolodexEnd = extractFunction(gestureEnd, "if (m_action == EExpoGestureAction::Rolodex)");
-    expectContains(rolodexEnd, "OV->endRolodexGesture()", "lift and cancel settle the captured session");
+    expectContains(rolodexEnd, "const bool wasActive = OV->endRolodexGesture()", "lift and cancel settle and check gesture ownership");
+    expectContains(rolodexEnd, "wasActive && e.swipe && !e.swipe->cancelled && !rolodexInputBlocked() && OV->onKbConfirm()",
+                   "only a normal, still-owned, uninhibited lift selects the nearest card");
+    expectOrder(rolodexEnd, "m_sessionGeneration = 0", "closeOverviewsSelecting(OV)", "selection is one-shot and does not leave stale ownership");
     expectAbsent(rolodexEnd, "onSwipeEnd", "Rolodex lift never invokes grid selection/toggle behavior");
+    const auto rolodexEndOwnership = extractFunction(source, "bool COverview::endRolodexGesture(");
+    expectContains(rolodexEndOwnership, "if (!rolodexGestureActive)", "disarmed sessions cannot claim lift ownership");
+    expectContains(rolodexEndOwnership, "return false", "unowned end refuses automatic confirmation");
+    expectOrder(rolodexEndOwnership, "rolodexGestureActive = false", "return true", "end releases ownership before allowing confirmation");
+    expectContains(sessionHeader, "bool endRolodexGesture() { return false; }", "other session types cannot request release selection");
     expectContains(rolodexTick, "!rolodexGestureActive", "held fingers suppress idle snapping");
     const auto rolodexUpdate = extractFunction(source, "void COverview::updateRolodexGesture(");
     expectContains(rolodexUpdate, "rolodexGestureActive && delta != 0", "zero motion and invalidated gestures cannot settle or move cards");

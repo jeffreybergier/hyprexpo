@@ -1130,12 +1130,13 @@ void COverview::updateRolodexGesture(double delta) {
         seedRolodexScroll(delta);
 }
 
-void COverview::endRolodexGesture() {
+bool COverview::endRolodexGesture() {
     if (!rolodexGestureActive)
-        return;
+        return false;
     rolodexGestureActive = false;
     rolodexScroll = 0;
     settleRolodex();
+    return true;
 }
 
 void COverview::tickRolodex() {

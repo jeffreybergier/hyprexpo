@@ -132,6 +132,7 @@ hl.plugin.hyprexpo.gesture({
     fingers = 3,
     direction = "vertical",
     action = "rolodex",
+    scale = 1.25, -- 25% faster than the default; affects only this gesture.
 })
 ```
 
@@ -139,12 +140,20 @@ Unlike `expo`, this action opens the overview and feeds the **same swipe** into
 its continuous rotation handler. Up advances, down reverses, and changing direction
 mid-swipe retraces the movement. The recognition update is processed once; no lift
 or second swipe is needed. Holding still with fingers down does not trigger the
-axis-scroll idle snap. Lifting (or compositor cancellation) snaps to the nearest
-card but leaves the overview open. Further swipes continue browsing, never toggle
-it closed. Click/Enter selects; Escape/right-click cancels.
+axis-scroll idle snap. **Lifting selects the nearest workspace card and closes
+the overview**, without an extra click or keypress. A compositor-cancelled or
+inhibited gesture settles without selecting. Escape/right-click cancels, and
+late release events cannot select a cancelled or replacement overview.
+
+For manual selection, open with the Mission Control/F3 key or the overview
+button. That entry remains open for two-finger scrolling, wheel or arrow-key
+navigation, then click/Enter selection. A three-finger vertical swipe inside a
+manually opened overview still opts into selection on lift.
 
 `rolodex_scroll_distance` controls speed (shared with two-finger scrolling);
-`scale` can tune this gesture independently. Only `vertical`, `up`, and `down`
+`scale` can tune this gesture independently: `1.25` produces 25% more movement
+for the same swipe, without changing pointer speed or two-finger scrolling.
+Only `vertical`, `up`, and `down`
 are accepted for this action. It does not open grid/native scrolling-layout
 sessions, bypass locks/inhibition/input capture, or activate inside unrelated
 submaps. Three-finger horizontal strokes are ignored while any Rolodex overview

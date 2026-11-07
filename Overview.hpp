@@ -47,7 +47,7 @@ class COverview final : public IOverviewSession {
     void seedRolodexScroll(double delta) override;
     bool beginRolodexGesture() override;
     void updateRolodexGesture(double delta) override;
-    void endRolodexGesture() override;
+    bool endRolodexGesture() override;
     bool blocksHorizontalSwipes() const override { return rolodex; }
     void setClosing(bool closing) override;
     void beginCancelSwipe() override;

@@ -115,9 +115,13 @@ void CExpoGesture::end(const ITrackpadGesture::STrackpadGestureEnd& e) {
         return;
 
     if (m_action == EExpoGestureAction::Rolodex) {
-        // Both a lift and a cancelled swipe settle without committing a workspace.
-        OV->endRolodexGesture();
+        // Only a normal lift from a still-owned gesture selects. Cancellation,
+        // inhibition, or timer-disarmed ownership must never commit a workspace.
+        const bool wasActive = OV->endRolodexGesture();
         m_sessionGeneration = 0;
+        if (wasActive && e.swipe && !e.swipe->cancelled && !rolodexInputBlocked() && OV->onKbConfirm())
+            closeOverviewsSelecting(OV);
+        // closeOverviewsSelecting can destroy the session; do not touch it again.
         return;
     }
 
