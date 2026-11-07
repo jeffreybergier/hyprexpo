@@ -514,7 +514,7 @@ int main() {
     expect(gestureRegister.find("action == \"cancel\"") != std::string::npos &&
                gestureRegister.find("makeUnique<CExpoGesture>(EExpoGestureAction::Cancel)") != std::string::npos,
            "Lua cancel registration constructs an explicit cancel gesture");
-    expect(gestureRegister.find("expected expo|cancel|unset") != std::string::npos,
+    expect(gestureRegister.find("expected expo|cancel|rolodex|unset") != std::string::npos,
            "invalid Lua gesture actions report the complete accepted set");
 
     expect(gestureHeader.find("enum class EExpoGestureAction") != std::string::npos,
@@ -1024,9 +1024,33 @@ int main() {
         expectContains(rolodexTick, guard, "release selection checks " + std::string{guard});
     expectOrder(rolodexTick, "rolodexReleaseArmed = false", "closeOverviewsSelecting(this)", "release confirmation is one-shot");
     expectContains(source, "rolodexTimer->cancel()", "teardown cancels the owned input timer");
+    const auto gridDestructor = extractFunction(source, "COverview::~COverview()");
+    for (const auto* timer : {"rolodexTimer", "redrawSettleTimer"})
+        expectOrder(gridDestructor, "removeTimer(" + std::string{timer} + ")", std::string{timer} + ".reset()",
+                    "teardown removes manager ownership before releasing " + std::string{timer});
     expectContains(source, "overviewForSession(key, generation)", "input timer callbacks are generation fenced");
     expectContains(source, "event.delta == 0", "axis-stop events settle continuous rotation");
     expectContains(source, "rolodex && !swipe", "release confirmation never takes ownership from expo swipe gestures");
+    expectContains(gestureRegister, "makeUnique<CExpoGesture>(EExpoGestureAction::Rolodex)", "Lua registers the native Rolodex swipe action");
+    expectContains(gestureRegister, "rolodex requires a vertical, up, or down swipe", "Rolodex refuses unrelated gesture axes");
+    const auto rolodexBegin = extractFunction(gestureBegin, "if (m_action == EExpoGestureAction::Rolodex)");
+    for (const auto& guard : {"!e.swipe", "rolodexInputBlocked()", "getCurrentSubmap()", "overviewOpen()", "plugin:hyprexpo:rolodex",
+                              "workspaceUsesScrollingLayout", "closeCommitted()", "beginRolodexGesture()"})
+        expectContains(rolodexBegin, guard, "Rolodex swipe activation checks " + std::string{guard});
+    expectContains(rolodexBegin, "m_sessionGeneration = TARGET->sessionGeneration()", "swipe captures only an accepting session");
+    expectAbsent(rolodexBegin, "seedRolodexScroll", "begin does not double-process the recognition event");
+    expectOrder(gestureUpdate, "OV->updateRolodexGesture(-e.swipe->delta.y * m_scale)", "if (m_firstUpdate)",
+                "Rolodex preserves first update, signed reversals, and gesture scale");
+    const auto rolodexEnd = extractFunction(gestureEnd, "if (m_action == EExpoGestureAction::Rolodex)");
+    expectContains(rolodexEnd, "OV->endRolodexGesture()", "lift and cancel settle the captured session");
+    expectAbsent(rolodexEnd, "onSwipeEnd", "Rolodex lift never invokes grid selection/toggle behavior");
+    expectContains(rolodexTick, "!rolodexGestureActive", "held fingers suppress idle snapping");
+    const auto rolodexUpdate = extractFunction(source, "void COverview::updateRolodexGesture(");
+    expectContains(rolodexUpdate, "rolodexGestureActive && delta != 0", "zero motion and invalidated gestures cannot settle or move cards");
+    expectContains(rolodexUpdate, "seedRolodexScroll(delta)", "three-finger swipes reuse continuous finger-scroll integration");
+    expectContains(extractFunction(source, "bool COverview::beginRolodexGesture("), "rolodexReleaseArmed = false",
+                   "native swipes do not acquire modifier-release selection");
+    expectContains(dispatchersSource, "gestureEnd(IPointer::SSwipeEndEvent{.cancelled = true})", "unload releases the compositor's active gesture before dlclose");
     const auto rolodexAnimation = extractFunction(source, "void COverview::configureRolodexAnimation()");
     expectContains(rolodexAnimation, "ANIMATION_SECONDS * 10", "Rolodex uses its own 300ms compositor timing");
     expectContains(rolodexAnimation, "internalEnabled", "Rolodex retains the inherited animation-enabled setting");

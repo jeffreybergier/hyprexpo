@@ -1109,15 +1109,45 @@ void COverview::seedRolodexScroll(double delta) {
     }
 }
 
+bool COverview::beginRolodexGesture() {
+    if (!rolodex || closing || m_isSwiping)
+        return false;
+    rolodexGestureActive = true;
+    rolodexReleaseArmed = false;
+    rolodexScroll = 0;
+    if (rolodexContinuous) {
+        // Re-grabbing interrupts a snap at its visible position, not its goal.
+        rolodexFrom = rolodexGoal = rolodexPosition();
+        rolodexTracking = true;
+        updateRolodexFocus();
+    }
+    return true;
+}
+
+void COverview::updateRolodexGesture(double delta) {
+    // A zero-motion update is a pause with fingers down, NOT an axis-stop.
+    if (rolodexGestureActive && delta != 0)
+        seedRolodexScroll(delta);
+}
+
+void COverview::endRolodexGesture() {
+    if (!rolodexGestureActive)
+        return;
+    rolodexGestureActive = false;
+    rolodexScroll = 0;
+    settleRolodex();
+}
+
 void COverview::tickRolodex() {
     if (closing)
         return;
     if (g_pSessionLockManager->isSessionLocked() || PROTO::shortcutsInhibit->isInhibited() || PROTO::inputCapture->isCaptured()) {
         rolodexReleaseArmed = false;
+        endRolodexGesture();
         settleRolodex();
         return;
     }
-    if (rolodexTracking && std::chrono::steady_clock::now() - rolodexLastScroll > std::chrono::milliseconds(120))
+    if (rolodexTracking && !rolodexGestureActive && std::chrono::steady_clock::now() - rolodexLastScroll > std::chrono::milliseconds(120))
         settleRolodex();
     // Observe merged modifier state after Hyprland has processed key events.
     // This handles either Super key, two keyboards, and modifier-only updates.
@@ -1130,10 +1160,16 @@ void COverview::tickRolodex() {
 }
 
 COverview::~COverview() {
-    if (rolodexTimer)
+    // cancel() alone leaves a manager-owned reference until the next idle.
+    // On plugin unload that would destroy a callback in already-unmapped code.
+    if (rolodexTimer) {
         rolodexTimer->cancel();
+        g_pEventLoopManager->removeTimer(rolodexTimer);
+        rolodexTimer.reset();
+    }
     if (redrawSettleTimer) {
         redrawSettleTimer->cancel();
+        g_pEventLoopManager->removeTimer(redrawSettleTimer);
         redrawSettleTimer.reset();
     }
     Render::GL::g_pHyprOpenGL->makeEGLCurrent();
@@ -1525,7 +1561,7 @@ COverview::COverview(PHLWORKSPACE startedOn_, PHLMONITOR monitor_, bool swipe_, 
             if (closing || info.cancelled || pointerOverview() != this)
                 return;
             info.cancelled = true;
-            if (event.axis != WL_POINTER_AXIS_VERTICAL_SCROLL)
+            if (rolodexGestureActive || event.axis != WL_POINTER_AXIS_VERTICAL_SCROLL)
                 return;
             if (event.delta == 0) {
                 if (event.source == WL_POINTER_AXIS_SOURCE_FINGER)

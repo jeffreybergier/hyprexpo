@@ -123,13 +123,39 @@ incomplete swipe restores the still-open overview. Each cancel swipe targets
 the opening workspace again, including after an incomplete expo close was
 previously aimed at another tile.
 
+### Continuous Rolodex browsing (local build)
+
+With `plugin.hyprexpo.rolodex = 1`, register a native vertical browsing gesture:
+
+```lua
+hl.plugin.hyprexpo.gesture({
+    fingers = 3,
+    direction = "vertical",
+    action = "rolodex",
+})
+```
+
+Unlike `expo`, this action opens the overview and feeds the **same swipe** into
+its continuous rotation handler. Up advances, down reverses, and changing direction
+mid-swipe retraces the movement. The recognition update is processed once; no lift
+or second swipe is needed. Holding still with fingers down does not trigger the
+axis-scroll idle snap. Lifting (or compositor cancellation) snaps to the nearest
+card but leaves the overview open. Further swipes continue browsing, never toggle
+it closed. Click/Enter selects; Escape/right-click cancels.
+
+`rolodex_scroll_distance` controls speed (shared with two-finger scrolling);
+`scale` can tune this gesture independently. Only `vertical`, `up`, and `down`
+are accepted for this action. It does not open grid/native scrolling-layout
+sessions, bypass locks/inhibition/input capture, or activate inside unrelated
+submaps. Horizontal workspace gestures and Super+scroll are unaffected.
+
 `gesture` accepts this table shape:
 
 | field | type | required | description |
 | --- | --- | --- | --- |
 | `fingers` | integer | yes | number of fingers |
 | `direction` | string | yes | swipe direction |
-| `action` | string | no | `expo`, `cancel`, or `unset`; defaults to `expo` |
+| `action` | string | no | `expo`, `cancel`, `rolodex` (local build), or `unset`; defaults to `expo` |
 | `mods` | string | no | modifier expression passed to Hyprland |
 | `scale` | number | no | gesture scale; defaults to `1.0` |
 | `disable_inhibit` | boolean | no | whether to bypass inhibit handling |

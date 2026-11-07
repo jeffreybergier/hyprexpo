@@ -540,10 +540,14 @@ static SDispatchResult registerExpoGesture(int fingerCount, const std::string& d
         result = g_pTrackpadGestures->addGesture(makeUnique<CExpoGesture>(EExpoGestureAction::Expo), fingerCount, direction, modMask, deltaScale, disableInhibit);
     else if (action == "cancel")
         result = g_pTrackpadGestures->addGesture(makeUnique<CExpoGesture>(EExpoGestureAction::Cancel), fingerCount, direction, modMask, deltaScale, disableInhibit);
-    else if (action == "unset")
+    else if (action == "rolodex") {
+        if (direction != TRACKPAD_GESTURE_DIR_VERTICAL && direction != TRACKPAD_GESTURE_DIR_UP && direction != TRACKPAD_GESTURE_DIR_DOWN)
+            return {.success = false, .error = "rolodex requires a vertical, up, or down swipe"};
+        result = g_pTrackpadGestures->addGesture(makeUnique<CExpoGesture>(EExpoGestureAction::Rolodex), fingerCount, direction, modMask, deltaScale, disableInhibit);
+    } else if (action == "unset")
         result = g_pTrackpadGestures->removeGesture(fingerCount, direction, modMask, deltaScale, disableInhibit);
     else
-        return {.success = false, .error = std::format("invalid action '{}', expected expo|cancel|unset", action)};
+        return {.success = false, .error = std::format("invalid action '{}', expected expo|cancel|rolodex|unset", action)};
 
     if (!result)
         return {.success = false, .error = result.error()};
@@ -553,6 +557,9 @@ static SDispatchResult registerExpoGesture(int fingerCount, const std::string& d
 
 void disableExpoGestureRegistration() {
     g_gestureRegistrationDisabled = true;
+    // Hyprland clearGestures() drops registrations but retains the active
+    // gesture. Finish it before dlclose can invalidate its plugin vtable.
+    g_pTrackpadGestures->gestureEnd(IPointer::SSwipeEndEvent{.cancelled = true});
 }
 
 static void reportGestureConfigError(const std::string& error) {

@@ -45,6 +45,9 @@ class COverview final : public IOverviewSession {
 
     // Used by activation and the in-overview listener; never replay an axis event.
     void seedRolodexScroll(double delta) override;
+    bool beginRolodexGesture() override;
+    void updateRolodexGesture(double delta) override;
+    void endRolodexGesture() override;
     void setClosing(bool closing) override;
     void beginCancelSwipe() override;
     // True once close() has armed the teardown animation. Further gestures must
@@ -157,6 +160,7 @@ class COverview final : public IOverviewSession {
     bool       rolodex = false;
     bool       rolodexContinuous = false;
     bool       rolodexTracking = false;
+    bool       rolodexGestureActive = false;
     bool       rolodexTransition = false;
     bool       rolodexReleaseArmed = false;
     double     rolodexScrollDistance = 96;

@@ -82,7 +82,7 @@ test: $(TEST_TARGET) $(SOURCE_TEST_TARGET) $(REGISTRY_TEST_TARGET) RolodexLayout
 $(TEST_TARGET): HyprexpoLogic.cpp HyprexpoLogic.hpp HyprexpoConfig.hpp ScrollingOverviewLogic.cpp ScrollingOverviewLogic.hpp ScrollingInputState.cpp ScrollingInputState.hpp ScrollingRequestId.hpp ScrollingMutationTransaction.cpp ScrollingMutationTransaction.hpp tests/HyprexpoLogicTests.cpp
 	$(CXX) -std=c++2b -Wall -Wextra -Werror HyprexpoLogic.cpp ScrollingOverviewLogic.cpp ScrollingInputState.cpp ScrollingMutationTransaction.cpp tests/HyprexpoLogicTests.cpp -o $@
 
-$(SOURCE_TEST_TARGET): tests/OverviewSourceTests.cpp IOverviewSession.hpp IOverviewSession.cpp Overview.cpp OverviewRender.cpp OverviewCapture.hpp OverviewCapture.cpp ScrollingOverview.hpp ScrollingOverview.cpp ScrollingInputState.hpp ScrollingInputState.cpp ScrollingMutationTransaction.hpp ScrollingMutationTransaction.cpp Dispatchers.cpp main.cpp ScrollingLayoutAdapter.cpp ScrollingDiagnostics.cpp scripts/read-scrolling-diagnostic.sh scripts/inject-scrolling-input.sh
+$(SOURCE_TEST_TARGET): tests/OverviewSourceTests.cpp ExpoGesture.cpp ExpoGesture.hpp IOverviewSession.hpp IOverviewSession.cpp Overview.cpp OverviewRender.cpp OverviewCapture.hpp OverviewCapture.cpp ScrollingOverview.hpp ScrollingOverview.cpp ScrollingInputState.hpp ScrollingInputState.cpp ScrollingMutationTransaction.hpp ScrollingMutationTransaction.cpp Dispatchers.cpp main.cpp ScrollingLayoutAdapter.cpp ScrollingDiagnostics.cpp scripts/read-scrolling-diagnostic.sh scripts/inject-scrolling-input.sh
 	$(CXX) -std=c++2b -Wall -Wextra -Werror tests/OverviewSourceTests.cpp -o $@
 
 $(REGISTRY_TEST_TARGET): tests/RegistryTeardownTests.cpp

@@ -70,6 +70,31 @@ resets on direction reversal, a 250ms gap, axis stop, keyboard activity, monitor
 change, or config reload. Rotated outputs and simultaneous
 mixed-scale multi-monitor Rolodex sessions remain unverified.
 
+### Three-finger vertical browsing
+
+The local Lua gesture action `rolodex` adds modifier-free continuous browsing:
+
+```lua
+hl.plugin.hyprexpo.gesture({ fingers = 3, direction = "vertical", action = "rolodex" })
+```
+
+Hyprland chooses the vertical/horizontal gesture after its native recognition
+threshold. The vertical recognition event feeds rotation exactly once, and later
+updates continue driving the same overview generation on the original monitor.
+Up advances (matching natural scrolling), down reverses. Entry uses the existing
+animated desktop/card morph. Pausing with fingers held does not snap; lifting or
+cancellation settles without selecting or closing. Another stroke continues
+browsing. Click/Enter confirms, Escape/right-click cancels. A cancelled/closed
+session cannot be revived by late updates or by the gesture's end event.
+
+The gesture uses `rolodex_scroll_distance`; its Lua `scale` optionally adjusts
+only three-finger speed. Super+wheel and Super+two-finger entry remain available,
+and horizontal workspace swipes are not removed. Unlike modifier-held entry,
+this gesture deliberately leaves the overview open when fingers lift. Grid and
+native scrolling-layout modes reject it. Input safety and default-submap checks
+match the existing activation path (the active overview's `hyprexpo` submap is
+also allowed). Unloading finishes an active native swipe before its code is unmapped.
+
 ## Interaction options
 
 These options are read when a session opens; changing them affects the next overview.
@@ -180,6 +205,40 @@ contained **8000 dark pixels before and zero after** the fix. A direct composito
 capture of the live desktop confirmed matching bars across Firefox/Ghostty.
 Source regression checks enforce native scene geometry, completion before
 resampling, direct small-FBO rendering, and local scratch-buffer lifetime.
+
+## Three-finger gesture validation
+
+Tested the native `CTrackpadGestures` begin/update/end path against Hyprland
+0.56.2 in a disposable Lua-configured compositor. A temporary test-only plugin
+injected swipe events and queried overview focus; it is not part of the deployed
+binary. All four repository test suites also pass, including source regression
+checks for the new action, ownership guards, and unload cleanup.
+
+- Subthreshold movement stays closed; the recognition update is neither dropped
+  nor replayed (a single -160 update with distance 192 selects the next card).
+- Up/down entry, backward wrap, signed reversal, repeated strokes, and explicit
+  confirmation work. Lifting or compositor cancellation leaves the view open.
+- A 600ms held-finger pause, a zero-motion update, and another 400ms pause retain
+  fractional rotation; the next movement continues without idle snapping.
+- Config reload during an active swipe retains continuity. Updates/end from an
+  old session do not move a replacement overview after Escape/cancellation.
+- Plain two-finger scrolling while closed and unregistered finger counts do not
+  open the overview. Two-finger browsing inside the overview still works.
+- The original horizontal workspace gesture still switches directly (tested with
+  two fixture workspaces). Disabled Rolodex/grid sessions reject browsing swipes.
+- Per-gesture scale applies once; invalid axes are rejected; the discrete
+  `rolodex_continuous = 0` fallback still steps.
+- Unload during an active swipe, reload, and another swipe passed. This test
+  initially exposed an existing overview timer cleanup bug: cancelling alone
+  retained callback destructors until after `dlclose`. Teardown now explicitly
+  removes both grid/Rolodex timers from the event-loop manager before releasing
+  them. The initial failure affected only the disposable compositor; all checks
+  were repeated successfully with the fix.
+
+These are synthetic compositor checks, not a claim about physical trackpad feel
+or multi-monitor/hot-unplug behavior. The laptop configuration keeps its existing
+192-unit scrolling distance and horizontal workspace swipe while adding the
+modifier-free three-finger vertical binding.
 
 ## Fluid interaction validation
 

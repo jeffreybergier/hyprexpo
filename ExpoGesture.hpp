@@ -8,6 +8,7 @@ class IOverviewSession;
 enum class EExpoGestureAction {
     Expo,
     Cancel,
+    Rolodex,
 };
 
 class CExpoGesture : public ITrackpadGesture {
