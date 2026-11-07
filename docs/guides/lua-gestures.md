@@ -147,7 +147,12 @@ it closed. Click/Enter selects; Escape/right-click cancels.
 `scale` can tune this gesture independently. Only `vertical`, `up`, and `down`
 are accepted for this action. It does not open grid/native scrolling-layout
 sessions, bypass locks/inhibition/input capture, or activate inside unrelated
-submaps. Horizontal workspace gestures and Super+scroll are unaffected.
+submaps. Three-finger horizontal strokes are ignored while any Rolodex overview
+is open (including its closing animation), preventing workspace switches behind
+the cards. A blocked stroke stays blocked until lift/cancellation, even if the
+overview closes first. Vertical browsing still accepts sideways drift after
+recognition. Horizontal workspace swipes work normally on the desktop again;
+Super+scroll is unaffected.
 
 `gesture` accepts this table shape:
 

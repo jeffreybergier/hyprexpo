@@ -13,6 +13,7 @@
 #include "OverviewCapture.hpp"
 #include "PluginConfig.hpp"
 #include "RolodexActivation.hpp"
+#include "RolodexSwipeGuard.hpp"
 #include "HyprlandConfigCompat.hpp"
 #include "ScrollingLayoutAdapter.hpp"
 #include <hyprland/src/managers/input/InputManager.hpp>
@@ -134,6 +135,24 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     static auto PMONITORREMOVED = Event::bus()->m_events.monitor.removed.listen([](PHLMONITOR monitor) {
         if (auto* const OV = overviewForMonitor(monitor))
             destroyOverview(OV);
+    });
+
+    static Hyprexpo::RolodexSwipeGuard swipeGuard;
+    static auto PSWIPEBEGIN = Event::bus()->m_events.gesture.swipe.begin.listen([](const IPointer::SSwipeBeginEvent& event, Event::SCallbackInfo& info) {
+        bool rolodexOpen = false;
+        forEachOverview([&](IOverviewSession& overview) { rolodexOpen |= overview.blocksHorizontalSwipes(); });
+        swipeGuard.begin(event.fingers, !info.cancelled && rolodexOpen);
+    });
+    static auto PSWIPEUPDATE = Event::bus()->m_events.gesture.swipe.update.listen([](const IPointer::SSwipeUpdateEvent& event, Event::SCallbackInfo& info) {
+        // This event precedes Hyprland's gesture recognition. Vertical strokes
+        // pass unchanged, including sideways drift after vertical recognition.
+        if (!info.cancelled && swipeGuard.suppress(event.delta.x, event.delta.y))
+            info.cancelled = true;
+    });
+    static auto PSWIPEEND = Event::bus()->m_events.gesture.swipe.end.listen([](const IPointer::SSwipeEndEvent&, Event::SCallbackInfo&) {
+        swipeGuard.end();
+        // Always let the end through to balance the compositor/client begin.
+        // No workspace gesture was started for a suppressed horizontal stroke.
     });
 
     static Hyprexpo::RolodexActivation activation;

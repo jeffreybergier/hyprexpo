@@ -1,9 +1,45 @@
 #include "../RolodexLayout.hpp"
 #include "../RolodexActivation.hpp"
+#include "../RolodexSwipeGuard.hpp"
 #include <cassert>
 #include <iostream>
 using namespace Hyprexpo::Rolodex;
 int main() {
+    Hyprexpo::RolodexSwipeGuard guard;
+    assert(!guard.suppress(20, 0)); // no begin: never capture unrelated updates
+    for (unsigned fingers : {2, 3, 4}) {
+        guard.begin(fingers, false);
+        assert(!guard.suppress(20, 0)); // desktop gestures unchanged
+    }
+    for (unsigned fingers : {2, 4}) {
+        guard.begin(fingers, true);
+        assert(!guard.suppress(20, 0)); // only three fingers are filtered
+    }
+    for (double sign : {-1.0, 1.0}) {
+        guard.begin(3, true);
+        assert(!guard.suppress(sign * 2, 0));
+        assert(!guard.suppress(sign * 2, 0));
+        assert(guard.suppress(sign, 0)); // cumulative threshold, either direction
+        assert(guard.suppress(0, 100)); // blocked stroke cannot become vertical
+        assert(guard.suppress(-sign * 100, 0)); // reversal remains blocked
+        guard.end();
+        assert(!guard.suppress(20, 0)); // end/cancel resets ownership
+        guard.begin(3, true);
+        assert(!guard.suppress(0, sign * 5));
+        assert(!guard.suppress(100, 0)); // vertical gesture retains sideways drift
+    }
+    guard.begin(3, true);
+    assert(!guard.suppress(5, 5)); // native vertical tie-break
+    assert(!guard.suppress(100, 0));
+    guard.begin(3, true);
+    assert(!guard.suppress(3, 0));
+    assert(!guard.suppress(-3, 0)); // accumulate displacement, not distance
+    assert(!guard.suppress(0, -5));
+    guard.begin(3, true);
+    assert(guard.suppress(6, 5)); // horizontal-dominant diagonal is blocked
+    guard.begin(3, false);
+    assert(!guard.suppress(100, 0)); // new desktop stroke clears the latch
+
     Hyprexpo::RolodexActivation activation;
     assert(!activation.update(3, 1000, true));
     assert(activation.update(7, 1010, true).value() == 2);

@@ -1010,6 +1010,18 @@ int main() {
     expectContains(source, "if (rolodex)\n        mouseAxisHook = Event::bus()->m_events.input.mouse.axis.listen",
                    "only opt-in rolodex sessions install axis ownership; ordinary grid does not");
     expectContains(source, "pointerOverview() != this", "rolodex axis ownership is monitor-local");
+    const auto swipeBeginListener = extractFunction(mainSource, "static auto PSWIPEBEGIN =");
+    expectContains(swipeBeginListener, "overview.blocksHorizontalSwipes()", "swipe filtering is limited to sessions that opt in");
+    expectContains(swipeBeginListener, "swipeGuard.begin(event.fingers, !info.cancelled && rolodexOpen)", "swipe eligibility is captured once at begin");
+    const auto swipeUpdateListener = extractFunction(mainSource, "static auto PSWIPEUPDATE =");
+    expectContains(swipeUpdateListener, "swipeGuard.suppress(event.delta.x, event.delta.y)", "horizontal filtering uses signed cumulative direction");
+    expectContains(swipeUpdateListener, "info.cancelled = true", "blocked swipe updates stop before native workspace recognition");
+    expectAbsent(swipeUpdateListener, "overviewOpen()", "a blocked stroke stays blocked after the overview closes");
+    const auto swipeEndListener = extractFunction(mainSource, "static auto PSWIPEEND =");
+    expectContains(swipeEndListener, "swipeGuard.end()", "lift and cancellation clear the swipe guard");
+    expectAbsent(swipeEndListener, "cancelled = true", "native gesture end remains balanced");
+    expectContains(overviewHeader, "blocksHorizontalSwipes() const override { return rolodex; }", "only Rolodex, including its close animation, blocks horizontal swipes");
+    expectContains(sessionHeader, "blocksHorizontalSwipes() const { return false; }", "other overview types retain their gesture behavior");
     const auto activationListener = extractFunction(mainSource, "static auto PAXIS =");
     for (const auto& guard : {"!overviewOpen()", "WL_POINTER_AXIS_SOURCE_FINGER", "WL_POINTER_AXIS_VERTICAL_SCROLL",
                               "stringToModMask(\"SUPER\")", "getCurrentSubmap().name.empty()", "isSessionLocked()",

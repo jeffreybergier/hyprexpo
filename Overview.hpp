@@ -48,6 +48,7 @@ class COverview final : public IOverviewSession {
     bool beginRolodexGesture() override;
     void updateRolodexGesture(double delta) override;
     void endRolodexGesture() override;
+    bool blocksHorizontalSwipes() const override { return rolodex; }
     void setClosing(bool closing) override;
     void beginCancelSwipe() override;
     // True once close() has armed the teardown animation. Further gestures must

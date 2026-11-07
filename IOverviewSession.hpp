@@ -33,6 +33,7 @@ class IOverviewSession {
     virtual bool beginRolodexGesture() { return false; }
     virtual void updateRolodexGesture(double delta) {}
     virtual void endRolodexGesture() {}
+    virtual bool blocksHorizontalSwipes() const { return false; }
     virtual void setClosing(bool closing) = 0;
     virtual void beginCancelSwipe() = 0;
     virtual bool closeCommitted() const = 0;

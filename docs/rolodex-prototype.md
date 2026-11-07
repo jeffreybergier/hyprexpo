@@ -88,8 +88,15 @@ browsing. Click/Enter confirms, Escape/right-click cancels. A cancelled/closed
 session cannot be revived by late updates or by the gesture's end event.
 
 The gesture uses `rolodex_scroll_distance`; its Lua `scale` optionally adjusts
-only three-finger speed. Super+wheel and Super+two-finger entry remain available,
-and horizontal workspace swipes are not removed. Unlike modifier-held entry,
+only three-finger speed. Super+wheel and Super+two-finger entry remain available.
+Three-finger horizontal workspace swipes remain available on the desktop, but
+are consumed while a Rolodex is open, including its closing animation. The
+input hook classifies the cumulative motion before Hyprland's native gesture
+recognition and latches the decision until lift/cancellation. Horizontal strokes
+cannot switch workspaces behind the cards or leak through after closing the
+overview mid-stroke. Vertical strokes still retain continuous browsing even
+when the fingers subsequently drift sideways. Other finger counts and other
+overview types are unaffected. Unlike modifier-held entry,
 this gesture deliberately leaves the overview open when fingers lift. Grid and
 native scrolling-layout modes reject it. Input safety and default-submap checks
 match the existing activation path (the active overview's `hyprexpo` submap is
@@ -234,6 +241,15 @@ checks for the new action, ownership guards, and unload cleanup.
   removes both grid/Rolodex timers from the event-loop manager before releasing
   them. The initial failure affected only the disposable compositor; all checks
   were repeated successfully with the fix.
+
+The horizontal-suppression follow-up also passed native `CInputManager` swipe
+injection through the cancellable event bus (not just direct gesture-manager
+calls): left/right suppression, cumulative subthreshold recognition, diagonal
+drift, cancellation followed by vertical browsing, reload during suppression,
+closure mid-stroke, the closing animation, and normal left/right desktop swipes
+between two persistent fixture workspaces. All earlier gesture tests were rerun.
+Pure tests cover the guard's threshold, sign/reversal, vertical tie-break, stroke
+lifetime, and exclusion of other finger counts; source checks cover event wiring.
 
 These are synthetic compositor checks, not a claim about physical trackpad feel
 or multi-monitor/hot-unplug behavior. The laptop configuration keeps its existing
